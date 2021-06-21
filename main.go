@@ -203,6 +203,76 @@ func main() {
 
 		http.Redirect(w, r, fmt.Sprintf("/projects?pID=%v", uint64(pID)), http.StatusSeeOther)
 	})
+
+	http.HandleFunc("/projects/png", func(w http.ResponseWriter, r *http.Request) {
+		pID := r.URL.Query().Get("pID")
+		r.ParseForm()
+		dbMu.Lock()
+		defer dbMu.Unlock()
+		rowsPairs, err := db.Query("select left, right from pairs where project = ?", pID)
+		if err != nil {
+			http.Error(w, http.StatusText(http.StatusInternalServerError)+":"+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		defer rowsPairs.Close()
+		input := &bytes.Buffer{}
+		knownBubblesIdx := make(map[string]struct{})
+		fmt.Fprintln(input, "digraph G {")
+		for rowsPairs.Next() {
+			var dep dep
+			if err := rowsPairs.Scan(&dep.Left, &dep.Right); err != nil {
+				http.Error(w, http.StatusText(http.StatusInternalServerError)+":"+err.Error(), http.StatusInternalServerError)
+				return
+			}
+			knownBubblesIdx[dep.Left] = struct{}{}
+			knownBubblesIdx[dep.Right] = struct{}{}
+			fmt.Fprintf(input, "	%q -> %q\n", dep.Left, dep.Right)
+		}
+		if err := rowsPairs.Err(); err != nil {
+			http.Error(w, http.StatusText(http.StatusInternalServerError)+":"+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		rowsBubbles, err := db.Query("select bubble, state from bubbles where project = ?", pID)
+		if err != nil {
+			http.Error(w, http.StatusText(http.StatusInternalServerError)+":"+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		defer rowsBubbles.Close()
+		for rowsBubbles.Next() {
+			var bubble bubble
+			if err := rowsBubbles.Scan(&bubble.Bubble, &bubble.State); err != nil {
+				http.Error(w, http.StatusText(http.StatusInternalServerError)+":"+err.Error(), http.StatusInternalServerError)
+				return
+			}
+			if _, ok := knownBubblesIdx[bubble.Bubble]; !ok {
+				continue
+			}
+			delete(knownBubblesIdx, bubble.Bubble)
+			fmt.Fprintf(input, `	%q [href="/flip?pID=%v&bubble=%v",%v]`, bubble.Bubble, pID, template.URLQueryEscaper(bubble.Bubble), bubble.State.color())
+			fmt.Fprintln(input)
+		}
+		if err := rowsBubbles.Err(); err != nil {
+			http.Error(w, http.StatusText(http.StatusInternalServerError)+":"+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		var knownBubbles []string
+		for k := range knownBubblesIdx {
+			knownBubbles = append(knownBubbles, k)
+		}
+		sort.Strings(knownBubbles)
+		for _, bubble := range knownBubbles {
+			fmt.Fprintf(input, `	%q [href="/flip?pID=%v&bubble=%v"]`, bubble, pID, template.URLQueryEscaper(bubble))
+			fmt.Fprintln(input)
+		}
+		fmt.Fprintln(input, "}")
+		cmd := exec.CommandContext(r.Context(), "dot", "-Tpng")
+		cmd.Stdin = input
+		cmd.Stdout = w
+		cmd.Stderr = w
+		w.Header().Set("content-type", "image/png")
+		cmd.Run()
+	})
+
 	http.HandleFunc("/projects", func(w http.ResponseWriter, r *http.Request) {
 		pID := r.URL.Query().Get("pID")
 		r.ParseForm()
@@ -398,6 +468,7 @@ const projectTpl = `
 				</table>
 			</div>
 			<input type="submit" onClick="javascript: (function(){document.forms[0].submit()})()" value="save"/>
+			<a href="/projects/png?pID={{ .PID }}" target="_blank" />png</a>
 			<div><svg style="height: 100vh; width: 100vw;">
 				{{ .Output }}
 			</svg></div>
