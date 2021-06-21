@@ -449,7 +449,7 @@ const indexHTMLTpl = `
 				</div>
 			</div>
 		</nav>
-		<div class="container">
+		<div class="container-fluid">
 			<div class="row">
 				<div class="col">
 					<h1>Projects</h1>
@@ -512,7 +512,7 @@ const projectTpl = `
 			</div>
 		</nav>
 
-		<div class="container">
+		<div class="container-fluid">
 			<div class="row">
 				<div class="col">
 					<h1>Project: {{ .Name }}</h1>
@@ -520,7 +520,7 @@ const projectTpl = `
 			</div>
 
 			<div class="row">
-				<div class="col-6">
+				<div class="col">
 					<form method="POST" enctype="application/x-www-form-urlencoded" action="/store?pID={{ .PID }}">
 						{{ if .Err }}
 						<div>{{ .Err }}</div>
@@ -562,9 +562,11 @@ const projectTpl = `
 						</pre>
 					</details>
 				</div>
-				<div class="col-6">
+			</div>
+			<div class="row">
+				<div class="col">
 					<div class="text-center"><a href="/projects/png?pID={{ .PID }}" target="_blank" class="btn btn-secondary" />png</a></div>
-					<svg style="height: 100vh; width: 100vw;">
+					<svg style="height: 100vh; width: 100%; overflow: auto">
 						{{ .Output }}
 					</svg>
 				</div>
