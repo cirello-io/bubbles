@@ -520,7 +520,7 @@ const projectTpl = `
 			</div>
 
 			<div class="row">
-				<div class="col">
+				<div class="col-6 offset-3">
 					<form method="POST" enctype="application/x-www-form-urlencoded" action="/store?pID={{ .PID }}">
 						{{ if .Err }}
 						<div>{{ .Err }}</div>
@@ -566,8 +566,10 @@ const projectTpl = `
 			<div class="row">
 				<div class="col">
 					<div class="text-center"><a href="/projects/png?pID={{ .PID }}" target="_blank" class="btn btn-secondary" />png</a></div>
-					<svg style="height: 100vh; width: 100%; overflow: auto">
+					<svg style="width: 100%; overflow: auto;">
+						<div style="display: flex; justify-content: center; align-items: center;">
 						{{ .Output }}
+						</div>
 					</svg>
 				</div>
 			</div>
