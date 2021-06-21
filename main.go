@@ -457,7 +457,7 @@ const projectTpl = `
 					<tr>
 						<td>{{ .Left }}</td>
 						<td>{{ .Right }}</td>
-						<td><a href="/remove?left={{.Left}}&right={{.Right}}">❌</a></td>
+						<td><a href="/remove?left={{.Left}}&right={{.Right}}">🗑️</a></td>
 					</tr>
 					{{ end }}
 					<tr>
