@@ -360,6 +360,20 @@ const projectTpl = `
 	<body>
 		<a href="/">&lt;&lt; main menu</a>
 		<h1>Project: {{ .Name }}</h1>
+		<details>
+			<summary>rename</summary>
+			<form method="POST" enctype="application/x-www-form-urlencoded" action="/rename?pID={{ .PID }}">
+				<label>from: <input type="text" name="from"></label>
+				<label>to: <input type="text" name="to"></label>
+				<input type="submit" onClick="javascript: (function(){document.forms[0].submit()})()" value="rename"/>
+			</form>
+		</details>
+		<details>
+			<summary>source</summary>
+			<pre>
+{{ .Src }}
+			</pre>
+		</details>
 		<form method="POST" enctype="application/x-www-form-urlencoded" action="/store?pID={{ .PID }}">
 			{{ if .Err }}
 			<div>{{ .Err }}</div>
@@ -383,27 +397,11 @@ const projectTpl = `
 					</tr>
 				</table>
 			</div>
+			<input type="submit" onClick="javascript: (function(){document.forms[0].submit()})()" value="save"/>
 			<div><svg style="height: 100vh; width: 100vw;">
 				{{ .Output }}
 			</svg></div>
-			<input type="submit" onClick="javascript: (function(){document.forms[0].submit()})()" value="save"/>
 		</form>
-
-		<details>
-			<summary>rename</summary>
-			<form method="POST" enctype="application/x-www-form-urlencoded" action="/rename?pID={{ .PID }}">
-				<label>from: <input type="text" name="from"></label>
-				<label>to: <input type="text" name="to"></label>
-				<input type="submit" onClick="javascript: (function(){document.forms[0].submit()})()" value="rename"/>
-			</form>
-		</details>
-
-		<details>
-			<summary>source</summary>
-			<pre>
-{{ .Src }}
-			</pre>
-		</details>
 	</body>
 </html>
 `
