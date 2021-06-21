@@ -1,4 +1,4 @@
-module github.com/ucirello/bubbleproject
+module github.com/ucirello/bubbles
 
 go 1.16
 
