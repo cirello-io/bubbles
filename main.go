@@ -383,7 +383,7 @@ const projectTpl = `
 					</tr>
 				</table>
 			</div>
-			<div><svg width="50%" height="50%">
+			<div><svg style="height: 100vh; width: 100vw;">
 				{{ .Output }}
 			</svg></div>
 			<input type="submit" onClick="javascript: (function(){document.forms[0].submit()})()" value="save"/>
