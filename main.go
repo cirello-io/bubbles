@@ -125,6 +125,35 @@ func main() {
 		http.Redirect(w, r, fmt.Sprintf("/projects?pID=%v", pID), http.StatusSeeOther)
 	})
 
+	http.HandleFunc("/rename", func(w http.ResponseWriter, r *http.Request) {
+		pID := r.URL.Query().Get("pID")
+		dbMu.Lock()
+		defer dbMu.Unlock()
+		r.ParseForm()
+		tx, err := db.Begin()
+		if err != nil {
+			http.Error(w, http.StatusText(http.StatusInternalServerError)+":"+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if _, err := tx.Exec("update pairs set left = ? where project = ? and left = ?", r.PostForm.Get("to"), pID, r.PostForm.Get("from")); err != nil {
+			http.Error(w, http.StatusText(http.StatusInternalServerError)+":"+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if _, err := tx.Exec("update pairs set right = ? where project = ? and right = ?", r.PostForm.Get("to"), pID, r.PostForm.Get("from")); err != nil {
+			http.Error(w, http.StatusText(http.StatusInternalServerError)+":"+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if _, err := tx.Exec("update bubbles set bubble = ? where project = ? and bubble = ?", r.PostForm.Get("to"), pID, r.PostForm.Get("from")); err != nil {
+			http.Error(w, http.StatusText(http.StatusInternalServerError)+":"+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if err := tx.Commit(); err != nil {
+			http.Error(w, http.StatusText(http.StatusInternalServerError)+":"+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		http.Redirect(w, r, fmt.Sprintf("/projects?pID=%v", pID), http.StatusSeeOther)
+	})
+
 	http.HandleFunc("/store", func(w http.ResponseWriter, r *http.Request) {
 		dbMu.Lock()
 		defer dbMu.Unlock()
@@ -359,6 +388,15 @@ const projectTpl = `
 			</svg></div>
 			<input type="submit" onClick="javascript: (function(){document.forms[0].submit()})()" value="save"/>
 		</form>
+
+		<details>
+			<summary>rename</summary>
+			<form method="POST" enctype="application/x-www-form-urlencoded" action="/rename?pID={{ .PID }}">
+				<label>from: <input type="text" name="from"></label>
+				<label>to: <input type="text" name="to"></label>
+				<input type="submit" onClick="javascript: (function(){document.forms[0].submit()})()" value="rename"/>
+			</form>
+		</details>
 
 		<details>
 			<summary>source</summary>
