@@ -409,70 +409,167 @@ func check(err error) {
 }
 
 const indexHTMLTpl = `
-<html>
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1">
+		<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.1/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-+0n0xVW2eSR5OomGNYDnhzAbDsOXxcvSN1TPprVMTNDbiYZCxYbOOl7+AMvyTG2x" crossorigin="anonymous">
+		<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.1/dist/js/bootstrap.bundle.min.js" integrity="sha384-gtEjrD/SeCtmISkJkNUaaKMoLD0//ElJ19smozuHV6z3Iehds+3Ulb9Bn9Plx0x4" crossorigin="anonymous"></script>
+	</head>
 	<body>
-	<h1>Projects</h1>
-	<ul>
-	{{ range .Project }}
-		<il><a href="/projects?pID={{.ID}}">{{.Name}}</a></il>
-	</ul>
-	{{ end }}
-	<form method="POST" enctype="application/x-www-form-urlencoded" action="/projects/new">
-		<label>project name:<input type="text" name="name"></label>
-		<input type="submit">
-	</form>
+		<nav class="navbar navbar-expand-lg navbar-light bg-light">
+			<div class="container-fluid">
+				<a class="navbar-brand" href="/">Bubbles</a>
+				<button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+					<span class="navbar-toggler-icon"></span>
+				</button>
+
+				<div class="collapse navbar-collapse" id="navbarSupportedContent">
+					<ul class="navbar-nav me-auto mb-2 mb-lg-0">
+						<li class="nav-item dropdown">
+							<a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+								New Project
+							</a>
+							<ul class="dropdown-menu" aria-labelledby="navbarDropdown">
+							<li>
+								<div class="dropdown-item">
+									<form method="POST" enctype="application/x-www-form-urlencoded" action="/projects/new">
+										<div class="mb-3">
+											<label class="form-label" for="name">project name:</label>
+											<input type="text" name="name" id="name" class="form-control"/>
+										</div>
+										<input type="submit" class="btn btn-primary"/>
+									</form>
+								</div>
+							</li>
+							</ul>
+						</li>
+					</ul>
+				</div>
+			</div>
+		</nav>
+		<div class="container">
+			<div class="row">
+				<div class="col">
+					<h1>Projects</h1>
+				</div>
+			</div>
+			<div class="row">
+				<div class="col">
+					<ul class="list-group">
+					{{ range .Project }}
+						<il class="list-group-item"><a href="/projects?pID={{.ID}}">{{.Name}}</a></il>
+					{{ end }}
+					</ul>
+				</div>
+			</div>
+
+		</div>
 	</body>
 </html>
 `
 
 const projectTpl = `
-<html>
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1">
+		<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.1/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-+0n0xVW2eSR5OomGNYDnhzAbDsOXxcvSN1TPprVMTNDbiYZCxYbOOl7+AMvyTG2x" crossorigin="anonymous">
+		<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.1/dist/js/bootstrap.bundle.min.js" integrity="sha384-gtEjrD/SeCtmISkJkNUaaKMoLD0//ElJ19smozuHV6z3Iehds+3Ulb9Bn9Plx0x4" crossorigin="anonymous"></script>
+	</head>
 	<body>
-		<a href="/">&lt;&lt; main menu</a>
-		<h1>Project: {{ .Name }}</h1>
-		<details>
-			<summary>rename</summary>
-			<form method="POST" enctype="application/x-www-form-urlencoded" action="/rename?pID={{ .PID }}">
-				<label>from: <input type="text" name="from"></label>
-				<label>to: <input type="text" name="to"></label>
-				<input type="submit" onClick="javascript: (function(){document.forms[0].submit()})()" value="rename"/>
-			</form>
-		</details>
-		<details>
-			<summary>source</summary>
-			<pre>
-{{ .Src }}
-			</pre>
-		</details>
-		<form method="POST" enctype="application/x-www-form-urlencoded" action="/store?pID={{ .PID }}">
-			{{ if .Err }}
-			<div>{{ .Err }}</div>
-			{{ end }}
-			<div>
-				<table border=1>
-					<thead>
-						<th colspan=2>... must happen before ...</th>
-					</thead>
-					{{ range .Input }}
-					<tr>
-						<td>{{ .Left }}</td>
-						<td>{{ .Right }}</td>
-						<td><a href="/remove?left={{.Left}}&right={{.Right}}">🗑️</a></td>
-					</tr>
-					{{ end }}
-					<tr>
-						<td><input type="text" name="newLeft"></td>
-						<td><input type="text" name="newRight"></td>
-						<td></td>
-					</tr>
-				</table>
+		<nav class="navbar navbar-expand-lg navbar-light bg-light">
+			<div class="container-fluid">
+				<a class="navbar-brand" href="/">Bubbles</a>
+				<button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+					<span class="navbar-toggler-icon"></span>
+				</button>
+
+				<div class="collapse navbar-collapse" id="navbarSupportedContent">
+					<ul class="navbar-nav me-auto mb-2 mb-lg-0">
+						<li class="nav-item dropdown">
+							<a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+								New Project
+							</a>
+							<ul class="dropdown-menu" aria-labelledby="navbarDropdown">
+							<li>
+								<div class="dropdown-item">
+									<form method="POST" enctype="application/x-www-form-urlencoded" action="/projects/new">
+										<div class="mb-3">
+											<label class="form-label" for="name">project name:</label>
+											<input type="text" name="name" id="name" class="form-control"/>
+										</div>
+										<input type="submit" class="btn btn-primary"/>
+									</form>
+								</div>
+							</li>
+							</ul>
+						</li>
+					</ul>
+				</div>
 			</div>
-			<input type="submit" onClick="javascript: (function(){document.forms[0].submit()})()" value="save"/>
-			<a href="/projects/png?pID={{ .PID }}" target="_blank" />png</a>
-			<div><svg style="height: 100vh; width: 100vw;">
-				{{ .Output }}
-			</svg></div>
-		</form>
+		</nav>
+
+		<div class="container">
+			<div class="row">
+				<div class="col">
+					<h1>Project: {{ .Name }}</h1>
+				</div>
+			</div>
+
+			<div class="row">
+				<div class="col-6">
+					<form method="POST" enctype="application/x-www-form-urlencoded" action="/store?pID={{ .PID }}">
+						{{ if .Err }}
+						<div>{{ .Err }}</div>
+						{{ end }}
+						<div>
+							<table class="table table-striped table-hover">
+								<thead>
+									<th colspan=2 scope="col" class="text-center">... must happen before ...</th>
+								</thead>
+								<tbody>
+								{{ range .Input }}
+								<tr>
+									<td class="text-center">{{ .Left }}</td>
+									<td class="text-center">{{ .Right }}</td>
+									<td class="text-center"><a href="/remove?left={{.Left}}&right={{.Right}}" style="text-decoration: none;">🗑️</a></td>
+								</tr>
+								{{ end }}
+								<tr>
+									<td class="text-center"><input type="text" name="newLeft"></td>
+									<td class="text-center"><input type="text" name="newRight"></td>
+									<td class="text-center"><input type="submit" onClick="javascript: (function(){document.forms[0].submit()})()" value="➕" class="btn"/></td>
+								</tr>
+								</tbody>
+							</table>
+						</div>
+					</form>
+					<details>
+						<summary>rename</summary>
+						<form method="POST" enctype="application/x-www-form-urlencoded" action="/rename?pID={{ .PID }}">
+							<label>from: <input type="text" name="from"></label>
+							<label>to: <input type="text" name="to"></label>
+							<input type="submit" onClick="javascript: (function(){document.forms[0].submit()})()" value="rename"/>
+						</form>
+					</details>
+					<details>
+						<summary>source</summary>
+						<pre>
+{{ .Src }}
+						</pre>
+					</details>
+				</div>
+				<div class="col-6">
+					<div class="text-center"><a href="/projects/png?pID={{ .PID }}" target="_blank" class="btn btn-secondary" />png</a></div>
+					<svg style="height: 100vh; width: 100vw;">
+						{{ .Output }}
+					</svg>
+				</div>
+			</div>
+		</div>
 	</body>
 </html>
 `
