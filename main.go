@@ -309,11 +309,14 @@ func main() {
 			http.Error(w, http.StatusText(http.StatusInternalServerError)+":"+err.Error(), http.StatusInternalServerError)
 			return
 		}
-		sort.SliceStable(deps, func(a, b int) bool {
-			return strings.Compare(deps[a].Left, deps[b].Left) < 0
-		})
-		sort.SliceStable(deps, func(a, b int) bool {
-			return strings.Compare(deps[a].Right, deps[b].Right) < 0
+		sort.Slice(deps, func(a, b int) bool {
+			if cmp := strings.Compare(deps[a].Left, deps[b].Left); cmp != 0 {
+				return cmp < 0
+			}
+			if cmp := strings.Compare(deps[a].Right, deps[b].Right); cmp != 0 {
+				return cmp < 0
+			}
+			return false
 		})
 		rowsBubbles, err := db.Query("select bubble, state from bubbles where project = ?", pID)
 		if err != nil {
