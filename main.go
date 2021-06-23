@@ -399,7 +399,6 @@ func main() {
 				Project []project
 			}{projects})
 		default:
-			fmt.Println(rt)
 			http.NotFound(w, r)
 			return
 		}
