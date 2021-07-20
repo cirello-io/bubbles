@@ -618,7 +618,7 @@ const projectTpl = `
 			<div class="row">
 				<div class="col-12">
 					<div class="text-center"><a href="/projects/png?pID={{ .PID }}" target="_blank" class="btn btn-secondary" />png</a></div>
-					<svg style="width: 100%; height: 100%; overflow: auto;">
+					<svg style="width: 100%; overflow: auto;">
 						<div style="display: flex; justify-content: center; align-items: center;">
 						{{ .Output }}
 						</div>
