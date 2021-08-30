@@ -85,9 +85,22 @@ func main() {
 	`
 	_, err = db.Exec(sqlStmt)
 	check(err)
+	conditionalMigrations := [...]struct {
+		test      string
+		migration string
+	}{
+		{`select freeform from projects`, `alter table projects add column freeform bool not null default false;`},
+	}
+	for _, m := range conditionalMigrations {
+		if _, err := db.Exec(m.test); err != nil {
+			_, err = db.Exec(m.migration)
+			check(err)
+		}
+	}
 
 	indexHTMLTpl := template.Must(template.New("index.html").Parse(indexHTMLTpl))
 	projectTpl := template.Must(template.New("index.html").Parse(projectTpl))
+	freeformProjectTpl := template.Must(template.New("index.html").Parse(freeformProjectTpl))
 
 	http.HandleFunc("/flip", func(w http.ResponseWriter, r *http.Request) {
 		dbMu.Lock()
@@ -215,6 +228,25 @@ func main() {
 		http.Redirect(w, r, fmt.Sprintf("/projects?pID=%v", pID), http.StatusSeeOther)
 	})
 
+	http.HandleFunc("/projects/new/freeform", func(w http.ResponseWriter, r *http.Request) {
+		r.ParseForm()
+		name := r.FormValue("name")
+		dbMu.Lock()
+		defer dbMu.Unlock()
+		result, err := db.Exec(`insert into projects (name,freeform) values (?,?)`, name, true)
+		if err != nil {
+			http.Error(w, http.StatusText(http.StatusInternalServerError)+":"+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		pID, err := result.LastInsertId()
+		if err != nil {
+			http.Error(w, http.StatusText(http.StatusInternalServerError)+":"+err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		http.Redirect(w, r, fmt.Sprintf("/projects?pID=%v", uint64(pID)), http.StatusSeeOther)
+	})
+
 	http.HandleFunc("/projects/new", func(w http.ResponseWriter, r *http.Request) {
 		r.ParseForm()
 		name := r.FormValue("name")
@@ -234,179 +266,144 @@ func main() {
 		http.Redirect(w, r, fmt.Sprintf("/projects?pID=%v", uint64(pID)), http.StatusSeeOther)
 	})
 
-	http.HandleFunc("/projects/png", func(w http.ResponseWriter, r *http.Request) {
-		pID := r.URL.Query().Get("pID")
-		r.ParseForm()
-		dbMu.Lock()
-		defer dbMu.Unlock()
-		rowsPairs, err := db.Query("select left, right from pairs where project = ?", pID)
-		if err != nil {
-			http.Error(w, http.StatusText(http.StatusInternalServerError)+":"+err.Error(), http.StatusInternalServerError)
-			return
-		}
-		defer rowsPairs.Close()
-		input := &bytes.Buffer{}
-		knownBubblesIdx := make(map[string]struct{})
-		fmt.Fprintln(input, "digraph G {")
-		for rowsPairs.Next() {
-			var dep dep
-			if err := rowsPairs.Scan(&dep.Left, &dep.Right); err != nil {
-				http.Error(w, http.StatusText(http.StatusInternalServerError)+":"+err.Error(), http.StatusInternalServerError)
-				return
-			}
-			knownBubblesIdx[dep.Left] = struct{}{}
-			knownBubblesIdx[dep.Right] = struct{}{}
-			fmt.Fprintf(input, "	%q -> %q\n", dep.Left, dep.Right)
-		}
-		if err := rowsPairs.Err(); err != nil {
-			http.Error(w, http.StatusText(http.StatusInternalServerError)+":"+err.Error(), http.StatusInternalServerError)
-			return
-		}
-		rowsBubbles, err := db.Query("select bubble, state from bubbles where project = ?", pID)
-		if err != nil {
-			http.Error(w, http.StatusText(http.StatusInternalServerError)+":"+err.Error(), http.StatusInternalServerError)
-			return
-		}
-		defer rowsBubbles.Close()
-		for rowsBubbles.Next() {
-			var bubble bubble
-			if err := rowsBubbles.Scan(&bubble.Bubble, &bubble.State); err != nil {
-				http.Error(w, http.StatusText(http.StatusInternalServerError)+":"+err.Error(), http.StatusInternalServerError)
-				return
-			}
-			if _, ok := knownBubblesIdx[bubble.Bubble]; !ok {
-				continue
-			}
-			delete(knownBubblesIdx, bubble.Bubble)
-			fmt.Fprintf(input, `	%q [href="/flip?pID=%v&bubble=%v",%v]`, bubble.Bubble, pID, template.URLQueryEscaper(bubble.Bubble), bubble.State.color())
-			fmt.Fprintln(input)
-		}
-		if err := rowsBubbles.Err(); err != nil {
-			http.Error(w, http.StatusText(http.StatusInternalServerError)+":"+err.Error(), http.StatusInternalServerError)
-			return
-		}
-		var knownBubbles []string
-		for k := range knownBubblesIdx {
-			knownBubbles = append(knownBubbles, k)
-		}
-		sort.Strings(knownBubbles)
-		for _, bubble := range knownBubbles {
-			fmt.Fprintf(input, `	%q [href="/flip?pID=%v&bubble=%v"]`, bubble, pID, template.URLQueryEscaper(bubble))
-			fmt.Fprintln(input)
-		}
-		fmt.Fprintln(input, "}")
-		cmd := exec.CommandContext(r.Context(), "dot", "-Tpng")
-		cmd.Stdin = input
-		cmd.Stdout = w
-		cmd.Stderr = w
-		w.Header().Set("content-type", "image/png")
-		cmd.Run()
-	})
-
 	http.HandleFunc("/projects", func(w http.ResponseWriter, r *http.Request) {
 		pID := r.URL.Query().Get("pID")
 		r.ParseForm()
 		var deps []dep
 		dbMu.Lock()
 		defer dbMu.Unlock()
-		var projectName string
-		rowProject := db.QueryRow("select name from projects where project = ?", pID)
-		if err := rowProject.Scan(&projectName); err != nil {
+		var (
+			projectName string
+			freeform    bool
+		)
+		rowProject := db.QueryRow("select name, freeform from projects where project = ?", pID)
+		if err := rowProject.Scan(&projectName, &freeform); err != nil {
 			http.Error(w, http.StatusText(http.StatusInternalServerError)+":"+err.Error(), http.StatusInternalServerError)
 			return
 		}
-		var projectDetails string
-		rowDetails := db.QueryRow("select details from details where project = ?", pID)
-		if err := rowDetails.Scan(&projectDetails); err != nil && err != sql.ErrNoRows {
-			http.Error(w, http.StatusText(http.StatusInternalServerError)+":"+err.Error(), http.StatusInternalServerError)
-			return
-		}
-		rowsPairs, err := db.Query("select left, right from pairs where project = ?", pID)
-		if err != nil {
-			http.Error(w, http.StatusText(http.StatusInternalServerError)+":"+err.Error(), http.StatusInternalServerError)
-			return
-		}
-		defer rowsPairs.Close()
-		input := &bytes.Buffer{}
-		knownBubblesIdx := make(map[string]struct{})
-		fmt.Fprintln(input, "digraph G {")
-		for rowsPairs.Next() {
-			var dep dep
-			if err := rowsPairs.Scan(&dep.Left, &dep.Right); err != nil {
+		switch freeform {
+		case true:
+			var projectDetails string
+			rowDetails := db.QueryRow("select details from details where project = ?", pID)
+			if err := rowDetails.Scan(&projectDetails); err != nil && err != sql.ErrNoRows {
 				http.Error(w, http.StatusText(http.StatusInternalServerError)+":"+err.Error(), http.StatusInternalServerError)
 				return
 			}
-			knownBubblesIdx[dep.Left] = struct{}{}
-			knownBubblesIdx[dep.Right] = struct{}{}
-			fmt.Fprintf(input, "	%q -> %q\n", dep.Left, dep.Right)
-			deps = append(deps, dep)
-		}
-		if err := rowsPairs.Err(); err != nil {
-			http.Error(w, http.StatusText(http.StatusInternalServerError)+":"+err.Error(), http.StatusInternalServerError)
-			return
-		}
-		sort.Slice(deps, func(a, b int) bool {
-			if cmp := strings.Compare(deps[a].Left, deps[b].Left); cmp != 0 {
-				return cmp < 0
+			src := projectDetails
+			cmd := exec.CommandContext(r.Context(), "dot", "-Tsvg")
+			cmd.Stdin = strings.NewReader(projectDetails)
+			var outBuf bytes.Buffer
+			cmd.Stdout = &outBuf
+			var errBuf bytes.Buffer
+			cmd.Stderr = &outBuf
+			if err := cmd.Run(); err != nil {
+				errBuf.WriteString("\n")
+				errBuf.WriteString(err.Error())
 			}
-			if cmp := strings.Compare(deps[a].Right, deps[b].Right); cmp != 0 {
-				return cmp < 0
-			}
-			return false
-		})
-		rowsBubbles, err := db.Query("select bubble, state from bubbles where project = ?", pID)
-		if err != nil {
-			http.Error(w, http.StatusText(http.StatusInternalServerError)+":"+err.Error(), http.StatusInternalServerError)
+			freeformProjectTpl.Execute(w, graph{
+				PID:     pID,
+				Name:    projectName,
+				Input:   deps,
+				Output:  template.HTML(outBuf.String()),
+				Err:     errBuf.String(),
+				Src:     src,
+				Details: projectDetails,
+			})
 			return
-		}
-		defer rowsBubbles.Close()
-		for rowsBubbles.Next() {
-			var bubble bubble
-			if err := rowsBubbles.Scan(&bubble.Bubble, &bubble.State); err != nil {
+		case false:
+			var projectDetails string
+			rowDetails := db.QueryRow("select details from details where project = ?", pID)
+			if err := rowDetails.Scan(&projectDetails); err != nil && err != sql.ErrNoRows {
 				http.Error(w, http.StatusText(http.StatusInternalServerError)+":"+err.Error(), http.StatusInternalServerError)
 				return
 			}
-			if _, ok := knownBubblesIdx[bubble.Bubble]; !ok {
-				continue
+			rowsPairs, err := db.Query("select left, right from pairs where project = ?", pID)
+			if err != nil {
+				http.Error(w, http.StatusText(http.StatusInternalServerError)+":"+err.Error(), http.StatusInternalServerError)
+				return
 			}
-			delete(knownBubblesIdx, bubble.Bubble)
-			fmt.Fprintf(input, `	%q [href="/flip?pID=%v&bubble=%v",%v]`, bubble.Bubble, pID, template.URLQueryEscaper(bubble.Bubble), bubble.State.color())
-			fmt.Fprintln(input)
+			defer rowsPairs.Close()
+			input := &bytes.Buffer{}
+			knownBubblesIdx := make(map[string]struct{})
+			fmt.Fprintln(input, "digraph G {")
+			for rowsPairs.Next() {
+				var dep dep
+				if err := rowsPairs.Scan(&dep.Left, &dep.Right); err != nil {
+					http.Error(w, http.StatusText(http.StatusInternalServerError)+":"+err.Error(), http.StatusInternalServerError)
+					return
+				}
+				knownBubblesIdx[dep.Left] = struct{}{}
+				knownBubblesIdx[dep.Right] = struct{}{}
+				fmt.Fprintf(input, "	%q -> %q\n", dep.Left, dep.Right)
+				deps = append(deps, dep)
+			}
+			if err := rowsPairs.Err(); err != nil {
+				http.Error(w, http.StatusText(http.StatusInternalServerError)+":"+err.Error(), http.StatusInternalServerError)
+				return
+			}
+			sort.Slice(deps, func(a, b int) bool {
+				if cmp := strings.Compare(deps[a].Left, deps[b].Left); cmp != 0 {
+					return cmp < 0
+				}
+				if cmp := strings.Compare(deps[a].Right, deps[b].Right); cmp != 0 {
+					return cmp < 0
+				}
+				return false
+			})
+			rowsBubbles, err := db.Query("select bubble, state from bubbles where project = ?", pID)
+			if err != nil {
+				http.Error(w, http.StatusText(http.StatusInternalServerError)+":"+err.Error(), http.StatusInternalServerError)
+				return
+			}
+			defer rowsBubbles.Close()
+			for rowsBubbles.Next() {
+				var bubble bubble
+				if err := rowsBubbles.Scan(&bubble.Bubble, &bubble.State); err != nil {
+					http.Error(w, http.StatusText(http.StatusInternalServerError)+":"+err.Error(), http.StatusInternalServerError)
+					return
+				}
+				if _, ok := knownBubblesIdx[bubble.Bubble]; !ok {
+					continue
+				}
+				delete(knownBubblesIdx, bubble.Bubble)
+				fmt.Fprintf(input, `	%q [href="/flip?pID=%v&bubble=%v",%v]`, bubble.Bubble, pID, template.URLQueryEscaper(bubble.Bubble), bubble.State.color())
+				fmt.Fprintln(input)
+			}
+			if err := rowsBubbles.Err(); err != nil {
+				http.Error(w, http.StatusText(http.StatusInternalServerError)+":"+err.Error(), http.StatusInternalServerError)
+				return
+			}
+			var knownBubbles []string
+			for k := range knownBubblesIdx {
+				knownBubbles = append(knownBubbles, k)
+			}
+			sort.Strings(knownBubbles)
+			for _, bubble := range knownBubbles {
+				fmt.Fprintf(input, `	%q [href="/flip?pID=%v&bubble=%v"]`, bubble, pID, template.URLQueryEscaper(bubble))
+				fmt.Fprintln(input)
+			}
+			fmt.Fprintln(input, "}")
+			src := input.String()
+			cmd := exec.CommandContext(r.Context(), "dot", "-Tsvg")
+			cmd.Stdin = input
+			var outBuf bytes.Buffer
+			cmd.Stdout = &outBuf
+			var errBuf bytes.Buffer
+			cmd.Stderr = &outBuf
+			if err := cmd.Run(); err != nil {
+				errBuf.WriteString("\n")
+				errBuf.WriteString(err.Error())
+			}
+			projectTpl.Execute(w, graph{
+				PID:     pID,
+				Name:    projectName,
+				Input:   deps,
+				Output:  template.HTML(outBuf.String()),
+				Err:     errBuf.String(),
+				Src:     src,
+				Details: projectDetails,
+			})
 		}
-		if err := rowsBubbles.Err(); err != nil {
-			http.Error(w, http.StatusText(http.StatusInternalServerError)+":"+err.Error(), http.StatusInternalServerError)
-			return
-		}
-		var knownBubbles []string
-		for k := range knownBubblesIdx {
-			knownBubbles = append(knownBubbles, k)
-		}
-		sort.Strings(knownBubbles)
-		for _, bubble := range knownBubbles {
-			fmt.Fprintf(input, `	%q [href="/flip?pID=%v&bubble=%v"]`, bubble, pID, template.URLQueryEscaper(bubble))
-			fmt.Fprintln(input)
-		}
-		fmt.Fprintln(input, "}")
-		src := input.String()
-		cmd := exec.CommandContext(r.Context(), "dot", "-Tsvg")
-		cmd.Stdin = input
-		var outBuf bytes.Buffer
-		cmd.Stdout = &outBuf
-		var errBuf bytes.Buffer
-		cmd.Stderr = &outBuf
-		if err := cmd.Run(); err != nil {
-			errBuf.WriteString("\n")
-			errBuf.WriteString(err.Error())
-		}
-		projectTpl.Execute(w, graph{
-			PID:     pID,
-			Name:    projectName,
-			Input:   deps,
-			Output:  template.HTML(outBuf.String()),
-			Err:     errBuf.String(),
-			Src:     src,
-			Details: projectDetails,
-		})
 	})
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -490,6 +487,24 @@ const indexHTMLTpl = `
 							</li>
 							</ul>
 						</li>
+						<li class="nav-item dropdown">
+							<a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+								New Free Form Project
+							</a>
+							<ul class="dropdown-menu" aria-labelledby="navbarDropdown">
+							<li>
+								<div class="dropdown-item">
+									<form method="POST" enctype="application/x-www-form-urlencoded" action="/projects/new/freeform">
+										<div class="mb-3">
+											<label class="form-label" for="name">project name:</label>
+											<input type="text" name="name" id="name" class="form-control"/>
+										</div>
+										<input type="submit" class="btn btn-primary"/>
+									</form>
+								</div>
+							</li>
+							</ul>
+						</li>
 					</ul>
 				</div>
 			</div>
@@ -542,6 +557,24 @@ const projectTpl = `
 							<li>
 								<div class="dropdown-item">
 									<form method="POST" enctype="application/x-www-form-urlencoded" action="/projects/new">
+										<div class="mb-3">
+											<label class="form-label" for="name">project name:</label>
+											<input type="text" name="name" id="name" class="form-control"/>
+										</div>
+										<input type="submit" class="btn btn-primary"/>
+									</form>
+								</div>
+							</li>
+							</ul>
+						</li>
+						<li class="nav-item dropdown">
+							<a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+								New Free Form Project
+							</a>
+							<ul class="dropdown-menu" aria-labelledby="navbarDropdown">
+							<li>
+								<div class="dropdown-item">
+									<form method="POST" enctype="application/x-www-form-urlencoded" action="/projects/new/freeform">
 										<div class="mb-3">
 											<label class="form-label" for="name">project name:</label>
 											<input type="text" name="name" id="name" class="form-control"/>
@@ -617,7 +650,96 @@ const projectTpl = `
 			</div>
 			<div class="row">
 				<div class="col-12">
-					<div class="text-center"><a href="/projects/png?pID={{ .PID }}" target="_blank" class="btn btn-secondary" />png</a></div>
+					<svg style="width: 100%; overflow: auto;">
+						<div style="display: flex; justify-content: center; align-items: center;">
+						{{ .Output }}
+						</div>
+					</svg>
+				</div>
+			</div>
+		</div>
+	</body>
+</html>
+`
+
+const freeformProjectTpl = `
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1">
+		<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.1/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-+0n0xVW2eSR5OomGNYDnhzAbDsOXxcvSN1TPprVMTNDbiYZCxYbOOl7+AMvyTG2x" crossorigin="anonymous">
+		<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.1/dist/js/bootstrap.bundle.min.js" integrity="sha384-gtEjrD/SeCtmISkJkNUaaKMoLD0//ElJ19smozuHV6z3Iehds+3Ulb9Bn9Plx0x4" crossorigin="anonymous"></script>
+	</head>
+	<body>
+		<nav class="navbar navbar-expand-lg navbar-light bg-light">
+			<div class="container-fluid">
+				<a class="navbar-brand" href="/">Bubbles</a>
+				<button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+					<span class="navbar-toggler-icon"></span>
+				</button>
+
+				<div class="collapse navbar-collapse" id="navbarSupportedContent">
+					<ul class="navbar-nav me-auto mb-2 mb-lg-0">
+						<li class="nav-item dropdown">
+							<a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+								New Project
+							</a>
+							<ul class="dropdown-menu" aria-labelledby="navbarDropdown">
+							<li>
+								<div class="dropdown-item">
+									<form method="POST" enctype="application/x-www-form-urlencoded" action="/projects/new">
+										<div class="mb-3">
+											<label class="form-label" for="name">project name:</label>
+											<input type="text" name="name" id="name" class="form-control"/>
+										</div>
+										<input type="submit" class="btn btn-primary"/>
+									</form>
+								</div>
+							</li>
+							</ul>
+						</li>
+						<li class="nav-item dropdown">
+							<a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+								New Free Form Project
+							</a>
+							<ul class="dropdown-menu" aria-labelledby="navbarDropdown">
+							<li>
+								<div class="dropdown-item">
+									<form method="POST" enctype="application/x-www-form-urlencoded" action="/projects/new/freeform">
+										<div class="mb-3">
+											<label class="form-label" for="name">project name:</label>
+											<input type="text" name="name" id="name" class="form-control"/>
+										</div>
+										<input type="submit" class="btn btn-primary"/>
+									</form>
+								</div>
+							</li>
+							</ul>
+						</li>
+					</ul>
+				</div>
+			</div>
+		</nav>
+
+		<div class="container-fluid">
+			<div class="row">
+				<div class="col">
+					<h1>Project: {{ .Name }}</h1>
+				</div>
+			</div>
+
+			<div class="row">
+				<div class="offset-3 col-6 text-center">
+					<h2>Graph</h2>
+					<form method="POST" enctype="application/x-www-form-urlencoded" action="/details?pID={{ .PID }}" style="height: 75%">
+					<textarea name="details" style="min-height: 300px; width: 100%; height: 100%; box-sizing:border-box" onkeydown="if(event.keyCode===9){var v=this.value,s=this.selectionStart,e=this.selectionEnd;this.value=v.substring(0, s)+'\t'+v.substring(e);this.selectionStart=this.selectionEnd=s+1;return false;}">{{ .Details }}</textarea>
+					<input type="submit" value="save"/>
+					</form>
+				</div>
+			</div>
+			<div class="row">
+				<div class="col-12">
 					<svg style="width: 100%; overflow: auto;">
 						<div style="display: flex; justify-content: center; align-items: center;">
 						{{ .Output }}
