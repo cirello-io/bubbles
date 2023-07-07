@@ -326,6 +326,7 @@ func main() {
 			input := &bytes.Buffer{}
 			knownBubblesIdx := make(map[string]struct{})
 			fmt.Fprintln(input, "digraph G {")
+			fmt.Fprintln(input, `	rankdir="LR"`)
 			for rowsPairs.Next() {
 				var dep dep
 				if err := rowsPairs.Scan(&dep.Left, &dep.Right); err != nil {
