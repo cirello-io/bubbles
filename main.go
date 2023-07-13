@@ -21,13 +21,14 @@ type dep struct {
 }
 
 type graph struct {
-	PID     string
-	Name    string
-	Input   []dep
-	Output  template.HTML
-	Err     string
-	Src     string
-	Details string
+	PID          string
+	Name         string
+	Input        []dep
+	Output       template.HTML
+	Err          string
+	Src          string
+	Details      string
+	KnownBubbles []string
 }
 
 type route struct {
@@ -396,13 +397,14 @@ func main() {
 				errBuf.WriteString(err.Error())
 			}
 			projectTpl.Execute(w, graph{
-				PID:     pID,
-				Name:    projectName,
-				Input:   deps,
-				Output:  template.HTML(outBuf.String()),
-				Err:     errBuf.String(),
-				Src:     src,
-				Details: projectDetails,
+				PID:          pID,
+				Name:         projectName,
+				Input:        deps,
+				Output:       template.HTML(outBuf.String()),
+				Err:          errBuf.String(),
+				Src:          src,
+				Details:      projectDetails,
+				KnownBubbles: knownBubbles,
 			})
 		}
 	})
@@ -601,6 +603,11 @@ const projectTpl = `
 			<div class="row">
 				<div class="col-6">
 					<form method="POST" enctype="application/x-www-form-urlencoded" action="/store?pID={{ .PID }}">
+						<datalist id="knownBubbles">
+						{{ range .KnownBubbles }}
+							<option>{{- . -}}</option>
+						{{ end }}
+						</datalist>
 						{{ if .Err }}
 						<div>{{ .Err }}</div>
 						{{ end }}
@@ -618,8 +625,8 @@ const projectTpl = `
 								</tr>
 								{{ end }}
 								<tr>
-									<td class="text-center"><input type="text" name="newLeft"></td>
-									<td class="text-center"><input type="text" name="newRight"></td>
+									<td class="text-center"><input type="text" list="knownBubbles" name="newLeft"></td>
+									<td class="text-center"><input type="text" list="knownBubbles" name="newRight"></td>
 									<td class="text-center"><input type="submit" onClick="javascript: (function(){document.forms[0].submit()})()" value="➕" class="btn"/></td>
 								</tr>
 								</tbody>
