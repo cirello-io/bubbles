@@ -1,5 +1,8 @@
 module cirello.io/bubbles
 
-go 1.16
+go 1.18
 
-require github.com/mattn/go-sqlite3 v1.14.8 // indirect
+require (
+	github.com/mattn/go-sqlite3 v1.14.17
+	golang.org/x/exp v0.0.0-20230711153332-06a737ee72cb
+)

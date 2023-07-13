@@ -14,6 +14,8 @@ import (
 	"sync"
 
 	_ "github.com/mattn/go-sqlite3"
+	"golang.org/x/exp/maps"
+	"golang.org/x/exp/slices"
 )
 
 type dep struct {
@@ -21,14 +23,14 @@ type dep struct {
 }
 
 type graph struct {
-	PID          string
-	Name         string
-	Input        []dep
-	Output       template.HTML
-	Err          string
-	Src          string
-	Details      string
-	KnownBubbles []string
+	PID             string
+	Name            string
+	Input           []dep
+	Output          template.HTML
+	Err             string
+	Src             string
+	Details         string
+	AllKnownBubbles []string
 }
 
 type route struct {
@@ -326,6 +328,7 @@ func main() {
 			defer rowsPairs.Close()
 			input := &bytes.Buffer{}
 			knownBubblesIdx := make(map[string]struct{})
+			allKnownBubbles := make(map[string]struct{})
 			fmt.Fprintln(input, "digraph G {")
 			fmt.Fprintln(input, `	rankdir="LR"`)
 			for rowsPairs.Next() {
@@ -336,6 +339,8 @@ func main() {
 				}
 				knownBubblesIdx[dep.Left] = struct{}{}
 				knownBubblesIdx[dep.Right] = struct{}{}
+				allKnownBubbles[dep.Left] = struct{}{}
+				allKnownBubbles[dep.Right] = struct{}{}
 				fmt.Fprintf(input, "	%q -> %q\n", dep.Left, dep.Right)
 				deps = append(deps, dep)
 			}
@@ -396,15 +401,17 @@ func main() {
 				errBuf.WriteString("\n")
 				errBuf.WriteString(err.Error())
 			}
+			allKnownBubblesList := maps.Keys(allKnownBubbles)
+			slices.Sort(allKnownBubblesList)
 			projectTpl.Execute(w, graph{
-				PID:          pID,
-				Name:         projectName,
-				Input:        deps,
-				Output:       template.HTML(outBuf.String()),
-				Err:          errBuf.String(),
-				Src:          src,
-				Details:      projectDetails,
-				KnownBubbles: knownBubbles,
+				PID:             pID,
+				Name:            projectName,
+				Input:           deps,
+				Output:          template.HTML(outBuf.String()),
+				Err:             errBuf.String(),
+				Src:             src,
+				Details:         projectDetails,
+				AllKnownBubbles: allKnownBubblesList,
 			})
 		}
 	})
@@ -604,7 +611,7 @@ const projectTpl = `
 				<div class="col-6">
 					<form method="POST" enctype="application/x-www-form-urlencoded" action="/store?pID={{ .PID }}">
 						<datalist id="knownBubbles">
-						{{ range .KnownBubbles }}
+						{{ range .AllKnownBubbles }}
 							<option>{{- . -}}</option>
 						{{ end }}
 						</datalist>
