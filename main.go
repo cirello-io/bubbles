@@ -621,21 +621,20 @@ const projectTpl = `
 						<div>
 							<table class="table table-striped table-hover">
 								<thead>
-									<th colspan=2 scope="col" class="text-center">... must happen before ...</th>
+									<th colspan=2 scope="col" class="text-center">
+									<input type="text" list="knownBubbles" id="newLeft" name="newLeft" onKeyUp="javascript: filter()">
+									must happen before
+									<input type="text" list="knownBubbles" id="newRight" name="newRight" onKeyUp="javascript: filter()">
+									<input type="submit" onClick="javascript: (function(){document.forms[0].submit()})()" value="➕" class="btn"/></th>
 								</thead>
-								<tbody>
+								<tbody id="pairsTableBody">
 								{{ range .Input }}
-								<tr>
+								<tr data-left="{{ .Left }}" data-right="{{ .Right }}">
 									<td class="text-center">{{ .Left }}</td>
 									<td class="text-center">{{ .Right }}</td>
 									<td class="text-center"><a href="/remove?left={{.Left}}&right={{.Right}}" style="text-decoration: none;">🗑️</a></td>
 								</tr>
 								{{ end }}
-								<tr>
-									<td class="text-center"><input type="text" list="knownBubbles" name="newLeft"></td>
-									<td class="text-center"><input type="text" list="knownBubbles" name="newRight"></td>
-									<td class="text-center"><input type="submit" onClick="javascript: (function(){document.forms[0].submit()})()" value="➕" class="btn"/></td>
-								</tr>
 								</tbody>
 							</table>
 						</div>
@@ -643,7 +642,7 @@ const projectTpl = `
 					<details>
 						<summary>rename</summary>
 						<form method="POST" enctype="application/x-www-form-urlencoded" action="/rename?pID={{ .PID }}">
-							<label>from: <input type="text" name="from"></label>
+							<label>from: <input type="text" list="knownBubbles" name="from"></label>
 							<label>to: <input type="text" name="to"></label>
 							<input type="submit" onClick="javascript: (function(){document.forms[0].submit()})()" value="rename"/>
 						</form>
@@ -673,6 +672,22 @@ const projectTpl = `
 				</div>
 			</div>
 		</div>
+<script>
+function filter() {
+	let left = document.getElementById("newLeft").value.toLowerCase()
+	let right = document.getElementById("newRight").value.toLowerCase()
+	let pairsTable = document.getElementById("pairsTableBody")
+	for (const tr of pairsTable.children) {
+		tr.style = 'display: table-row'
+		if (left != "" && !tr.dataset.left.toLowerCase().includes(left)) {
+			tr.style = 'display: none'
+		}
+		if (right != "" && !tr.dataset.right.toLowerCase().includes(right)) {
+			tr.style = 'display: none'
+		}
+	}
+}
+</script>
 	</body>
 </html>
 `
