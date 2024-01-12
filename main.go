@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"html/template"
+	"io"
 	"log"
 	"net/http"
 	"os/exec"
@@ -367,6 +368,22 @@ func main() {
 		}
 		fmt.Fprintln(input, "}")
 		src := input.String()
+
+		download := r.URL.Query().Has("download")
+		if download {
+			cmd := exec.CommandContext(r.Context(), "dot", "-Tpng")
+			cmd.Stdin = input
+			var outBuf bytes.Buffer
+			cmd.Stdout = &outBuf
+			if err := cmd.Run(); err != nil {
+				log.Println(err)
+			}
+			w.Header().Set("Content-Type", "image/png")
+			w.Header().Set("Content-Disposition", `attachment; filename="graph.png"`)
+			io.Copy(w, &outBuf)
+			return
+		}
+
 		cmd := exec.CommandContext(r.Context(), "dot", "-Tsvg")
 		cmd.Stdin = input
 		var outBuf bytes.Buffer
@@ -617,6 +634,9 @@ const projectTpl = `
 						{{ .Output }}
 						</div>
 					</svg>
+				</div>
+				<div class="col-12 text-center">
+					<a href="/projects?pID={{ .PID }}&download" class="btn btn-secondary col-1">download</a>
 				</div>
 			</div>
 		</div>
