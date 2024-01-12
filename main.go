@@ -187,10 +187,17 @@ func main() {
 			return
 		}
 		pID := r.URL.Query().Get("pID")
+		newCenter := strings.TrimSpace(r.PostForm.Get("newCenter"))
 		newLeft := strings.TrimSpace(r.PostForm.Get("newLeft"))
 		newRight := strings.TrimSpace(r.PostForm.Get("newRight"))
-		if pID != "" && newLeft != "" && newRight != "" {
-			if _, err := stmt.Exec(pID, newLeft, newRight); err != nil {
+		if pID != "" && newCenter != "" && newRight != "" {
+			if _, err := stmt.Exec(pID, newCenter, newRight); err != nil {
+				http.Error(w, http.StatusText(http.StatusInternalServerError)+":"+err.Error(), http.StatusInternalServerError)
+				return
+			}
+		}
+		if pID != "" && newLeft != "" && newCenter != "" {
+			if _, err := stmt.Exec(pID, newLeft, newCenter); err != nil {
 				http.Error(w, http.StatusText(http.StatusInternalServerError)+":"+err.Error(), http.StatusInternalServerError)
 				return
 			}
@@ -622,8 +629,10 @@ const projectTpl = `
 							<table class="table table-striped table-hover">
 								<thead>
 									<th colspan=2 scope="col" class="text-center">
+									<input type="text" list="knownBubbles" id="newCenter" name="newCenter" onKeyUp="javascript: filter()">
+									happens between
 									<input type="text" list="knownBubbles" id="newLeft" name="newLeft" onKeyUp="javascript: filter()">
-									must happen before
+									and
 									<input type="text" list="knownBubbles" id="newRight" name="newRight" onKeyUp="javascript: filter()">
 									<input type="submit" onClick="javascript: (function(){document.forms[0].submit()})()" value="➕" class="btn"/></th>
 								</thead>
@@ -674,11 +683,15 @@ const projectTpl = `
 		</div>
 <script>
 function filter() {
+	let center = document.getElementById("newCenter").value.toLowerCase()
 	let left = document.getElementById("newLeft").value.toLowerCase()
 	let right = document.getElementById("newRight").value.toLowerCase()
 	let pairsTable = document.getElementById("pairsTableBody")
 	for (const tr of pairsTable.children) {
 		tr.style = 'display: table-row'
+		if (center != "" && !tr.dataset.left.toLowerCase().includes(center) && !tr.dataset.right.toLowerCase().includes(center)) {
+			tr.style = 'display: none'
+		}
 		if (left != "" && !tr.dataset.left.toLowerCase().includes(left)) {
 			tr.style = 'display: none'
 		}
