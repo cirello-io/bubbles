@@ -637,6 +637,7 @@ const projectTpl = `
 				</div>
 				<div class="col-12 text-center">
 					<a href="/projects?pID={{ .PID }}&download" class="btn btn-secondary col-1">download</a>
+					<a href="javascript: copyImageToClipboard()" class="btn btn-secondary col-1">copy</a>
 				</div>
 			</div>
 		</div>
@@ -657,6 +658,17 @@ function filter() {
 		if (right != "" && !tr.dataset.right.toLowerCase().includes(right)) {
 			tr.style = 'display: none'
 		}
+	}
+}
+async function copyImageToClipboard() {
+	try {
+		const response = await fetch("/projects?pID={{ .PID }}&download");
+		const blob = await response.blob();
+		await navigator.clipboard.write([
+			new ClipboardItem({[blob.type]: blob})
+		]);
+	} catch (e) {
+		console.error("cannot copy image to clipboard", e);
 	}
 }
 </script>
