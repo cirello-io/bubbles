@@ -86,19 +86,10 @@ func main() {
 	create unique index if not exists bubbles_project_bubble ON bubbles (project, bubble);
 	create table if not exists projects (project integer primary key autoincrement, name text);
 	create table if not exists details (project integer primary key, details longtext);
+	create unique index if not exists pairs_unique on pairs (project, left, right);
 	`
 	_, err = db.Exec(sqlStmt)
 	check(err)
-	conditionalMigrations := [...]struct {
-		test      string
-		migration string
-	}{}
-	for _, m := range conditionalMigrations {
-		if _, err := db.Exec(m.test); err != nil {
-			_, err = db.Exec(m.migration)
-			check(err)
-		}
-	}
 
 	indexHTMLTpl := template.Must(template.New("index.html").Parse(indexHTMLTpl))
 	projectTpl := template.Must(template.New("index.html").Parse(projectTpl))
@@ -200,7 +191,7 @@ func main() {
 			http.Error(w, http.StatusText(http.StatusInternalServerError)+":"+err.Error(), http.StatusInternalServerError)
 			return
 		}
-		stmt, err := tx.Prepare("insert into pairs (project, left, right) values(?, ?, ?)")
+		stmt, err := tx.Prepare("insert into pairs (project, left, right) values (?, ?, ?) on conflict (project, left, right) do nothing")
 		if err != nil {
 			http.Error(w, http.StatusText(http.StatusInternalServerError)+":"+err.Error(), http.StatusInternalServerError)
 			return
@@ -578,10 +569,11 @@ const projectTpl = `
 							<table class="table table-striped table-hover">
 								<thead>
 									<th colspan=2 scope="col" class="text-center">
-									<input type="text" list="knownBubbles" id="newCenter" name="newCenter" onKeyUp="javascript: filter()">
-									happens between
+
 									<input type="text" list="knownBubbles" id="newLeft" name="newLeft" onKeyUp="javascript: filter()">
-									and
+									-&gt;
+									<input type="text" list="knownBubbles" id="newCenter" name="newCenter" onKeyUp="javascript: filter()">
+									-&gt;
 									<input type="text" list="knownBubbles" id="newRight" name="newRight" onKeyUp="javascript: filter()">
 									<input type="submit" onClick="javascript: (function(){document.forms[0].submit()})()" value="➕" class="btn"/></th>
 								</thead>
