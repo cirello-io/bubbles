@@ -634,10 +634,40 @@ const projectTpl = `
 			</div>
 		</div>
 <script>
+function setCookie(value) {
+	document.cookie = "bubbles=" + encodeURIComponent(JSON.stringify(value));
+}
+function getCookie() {
+	var ca = document.cookie.split(';');
+	for (const kv of ca) {
+		if (kv.trim().startsWith("bubbles=")){
+			try {
+				return JSON.parse(decodeURIComponent(kv.trim().split("=")[1]))
+			} catch (e) {
+			}
+			break
+		}
+	}
+	return {'left':'','center':'','right':''}
+}
+window.onload = function() {
+	const v = getCookie()
+	document.getElementById("newLeft").value =  v.left
+	document.getElementById("newCenter").value =  v.center
+	document.getElementById("newRight").value = v.right
+	filter()
+};
+
 function filter() {
 	let center = document.getElementById("newCenter").value.toLowerCase()
 	let left = document.getElementById("newLeft").value.toLowerCase()
 	let right = document.getElementById("newRight").value.toLowerCase()
+	setCookie({
+		'left':document.getElementById("newLeft").value,
+		'center':document.getElementById("newCenter").value,
+		'right':document.getElementById("newRight").value
+	})
+
 	let pairsTable = document.getElementById("pairsTableBody")
 	for (const tr of pairsTable.children) {
 		tr.style = 'display: table-row'
