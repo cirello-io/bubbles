@@ -641,14 +641,20 @@ function filter() {
 	let pairsTable = document.getElementById("pairsTableBody")
 	for (const tr of pairsTable.children) {
 		tr.style = 'display: table-row'
-		if (center != "" && !tr.dataset.left.toLowerCase().includes(center) && !tr.dataset.right.toLowerCase().includes(center)) {
-			tr.style = 'display: none'
-		}
-		if (left != "" && !tr.dataset.left.toLowerCase().includes(left)) {
-			tr.style = 'display: none'
-		}
-		if (right != "" && !tr.dataset.right.toLowerCase().includes(right)) {
-			tr.style = 'display: none'
+	}
+	if (center == "" && left == "" && right == "") {
+		return
+	}
+	for (const tr of pairsTable.children) {
+		tr.style = 'display: none'
+		if (center == "" && left != "" && right != "" && (tr.dataset.left.toLowerCase().includes(left) || tr.dataset.right.toLowerCase().includes(right))) {
+			tr.style = 'display: table-row'
+		} else if (center != "" && (tr.dataset.left.toLowerCase().includes(center) || tr.dataset.right.toLowerCase().includes(center))) {
+			tr.style = 'display: table-row'
+		} else if (left != "" && tr.dataset.left.toLowerCase().includes(left)) {
+			tr.style = 'display: table-row'
+		} else if (right != "" && tr.dataset.right.toLowerCase().includes(right)) {
+			tr.style = 'display: table-row'
 		}
 	}
 }
