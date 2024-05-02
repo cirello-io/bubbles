@@ -260,9 +260,25 @@ func main() {
 		var deps []dep
 		dbMu.Lock()
 		defer dbMu.Unlock()
-		var (
-			projectName string
-		)
+		if r.Method == http.MethodPost && r.Form.Has("delete") {
+			pID := r.Form.Get("pID")
+			if _, err := db.Exec("DELETE FROM pairs WHERE project = ?", pID); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			if _, err := db.Exec("DELETE FROM bubbles WHERE project = ?", pID); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			if _, err := db.Exec("DELETE FROM projects WHERE project = ?", pID); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			http.Redirect(w, r, "/", http.StatusSeeOther)
+			return
+		}
+
+		var projectName string
 		rowProject := db.QueryRow("select name from projects where project = ?", pID)
 		if err := rowProject.Scan(&projectName); err != nil {
 			http.Error(w, http.StatusText(http.StatusInternalServerError)+":"+err.Error(), http.StatusInternalServerError)
@@ -477,7 +493,14 @@ const indexHTMLTpl = `
 				<div class="col">
 					<ul class="list-group">
 					{{ range .Project }}
-						<il class="list-group-item"><a href="/projects?pID={{.ID}}">{{.Name}}</a></il>
+						<il class="list-group-item">
+							<a href="/projects?pID={{.ID}}">{{.Name}}</a>
+							<form method="POST" action="/projects" class="d-inline" onsubmit="return confirm('confirm deletion?')">
+								<input type="hidden" name="delete" value="true">
+								<input type="hidden" name="pID" value="{{.ID}}">
+								<input type=submit value="🗑️"/>
+							</form>
+						</il>
 					{{ end }}
 					</ul>
 				</div>
