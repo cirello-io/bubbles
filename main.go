@@ -30,7 +30,6 @@ type graph struct {
 	Output          template.HTML
 	Err             string
 	Src             string
-	Details         string
 	AllKnownBubbles []string
 	Vertical        bool
 }
@@ -86,7 +85,6 @@ func main() {
 	create table if not exists bubbles (project bigint, bubble text, state text);
 	create unique index if not exists bubbles_project_bubble ON bubbles (project, bubble);
 	create table if not exists projects (project integer primary key autoincrement, name text);
-	create table if not exists details (project integer primary key, details longtext);
 	create unique index if not exists pairs_unique on pairs (project, left, right);
 	`
 	_, err = db.Exec(sqlStmt)
@@ -237,34 +235,6 @@ func main() {
 		http.Redirect(w, r, seeOtherURL, http.StatusSeeOther)
 	})
 
-	http.HandleFunc("/details", func(w http.ResponseWriter, r *http.Request) {
-		dbMu.Lock()
-		defer dbMu.Unlock()
-		r.ParseForm()
-		tx, err := db.Begin()
-		if err != nil {
-			http.Error(w, http.StatusText(http.StatusInternalServerError)+":"+err.Error(), http.StatusInternalServerError)
-			return
-		}
-		stmt, err := tx.Prepare("insert into details (project, details) values (?, ?) ON CONFLICT (project) DO UPDATE SET details = excluded.details")
-		if err != nil {
-			http.Error(w, http.StatusText(http.StatusInternalServerError)+":"+err.Error(), http.StatusInternalServerError)
-			return
-		}
-		pID := r.URL.Query().Get("pID")
-		details := strings.TrimSpace(r.PostForm.Get("details"))
-		if _, err := stmt.Exec(pID, details); err != nil {
-			http.Error(w, http.StatusText(http.StatusInternalServerError)+":"+err.Error(), http.StatusInternalServerError)
-			return
-		}
-		if err := tx.Commit(); err != nil {
-			http.Error(w, http.StatusText(http.StatusInternalServerError)+":"+err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		http.Redirect(w, r, fmt.Sprintf("/projects?pID=%v", pID), http.StatusSeeOther)
-	})
-
 	http.HandleFunc("/projects/new", func(w http.ResponseWriter, r *http.Request) {
 		r.ParseForm()
 		name := r.FormValue("name")
@@ -299,12 +269,6 @@ func main() {
 			return
 		}
 
-		var projectDetails string
-		rowDetails := db.QueryRow("select details from details where project = ?", pID)
-		if err := rowDetails.Scan(&projectDetails); err != nil && err != sql.ErrNoRows {
-			http.Error(w, http.StatusText(http.StatusInternalServerError)+":"+err.Error(), http.StatusInternalServerError)
-			return
-		}
 		rowsPairs, err := db.Query("select left, right from pairs where project = ?", pID)
 		if err != nil {
 			http.Error(w, http.StatusText(http.StatusInternalServerError)+":"+err.Error(), http.StatusInternalServerError)
@@ -413,7 +377,6 @@ func main() {
 			Output:          template.HTML(outBuf.String()),
 			Err:             errBuf.String(),
 			Src:             src,
-			Details:         projectDetails,
 			AllKnownBubbles: allKnownBubblesList,
 			Vertical:        r.URL.Query().Has("vertical"),
 		})
@@ -575,6 +538,61 @@ const projectTpl = `
 			</div>
 
 			<div class="row">
+				<div class="col-12 text-center">
+					<a href="/projects?pID={{ .PID }}&download{{ if .Vertical }}&vertical{{end}}" class="btn btn-secondary col-1">download</a>
+					<a href="javascript: copyImageToClipboard()" class="btn btn-secondary col-1">copy</a>
+					{{ if .Vertical }}
+					<a href="/projects?pID={{ .PID }}" class="btn btn-secondary col-1">horizontal</a>
+					{{ else }}
+					<a href="/projects?pID={{ .PID }}&vertical" class="btn btn-secondary col-1">vertical</a>
+					{{ end }}
+				</div>
+				<div class="col-12">
+					<svg style="width: 100%; overflow: auto;">
+						<div style="display: flex; justify-content: center; align-items: center;">
+						{{ .Output }}
+						</div>
+					</svg>
+				</div>
+
+			</div>
+
+			<div class="row">
+				<div class="col-4">
+					<details>
+						<summary>rename</summary>
+						<form method="POST" enctype="application/x-www-form-urlencoded" action="/rename?pID={{ .PID }}{{ if .Vertical }}&vertical{{ end }}">
+							<label>from: <input type="text" list="knownBubbles" name="from"></label>
+							<label>to: <input type="text" name="to"></label>
+							<input type="submit" onClick="javascript: (function(){document.forms[0].submit()})()" value="rename"/>
+						</form>
+					</details>
+				</div>
+				<div class="col-4">
+					<details>
+						<summary>delete</summary>
+						<form method="POST" enctype="application/x-www-form-urlencoded" action="/delete?pID={{ .PID }}{{ if .Vertical }}&vertical{{ end }}">
+							<label>activity: <input type="text" list="knownBubbles" name="activity"></label>
+							<input type="submit" onClick="javascript: (function(){document.forms[0].submit()})()" value="delete"/>
+						</form>
+					</details>
+				</div>
+				<div class="col-4">
+				<details>
+					<summary>source</summary>
+					<pre>
+{{ .Src }}
+					</pre>
+				</details>
+				</div>
+			</div>
+			<div class="row">
+				<div class="col-12">
+					<hr/>
+				</div>
+			</div>
+			<div class="row">
+				<div class="col-3"></div>
 				<div class="col-6">
 					<form method="POST" enctype="application/x-www-form-urlencoded" action="/store?pID={{ .PID }}{{ if .Vertical }}&vertical{{ end }}">
 						<datalist id="knownBubbles">
@@ -610,53 +628,8 @@ const projectTpl = `
 							</table>
 						</div>
 					</form>
-					<details>
-						<summary>rename</summary>
-						<form method="POST" enctype="application/x-www-form-urlencoded" action="/rename?pID={{ .PID }}{{ if .Vertical }}&vertical{{ end }}">
-							<label>from: <input type="text" list="knownBubbles" name="from"></label>
-							<label>to: <input type="text" name="to"></label>
-							<input type="submit" onClick="javascript: (function(){document.forms[0].submit()})()" value="rename"/>
-						</form>
-					</details>
-					<details>
-						<summary>delete</summary>
-						<form method="POST" enctype="application/x-www-form-urlencoded" action="/delete?pID={{ .PID }}{{ if .Vertical }}&vertical{{ end }}">
-							<label>activity: <input type="text" list="knownBubbles" name="activity"></label>
-							<input type="submit" onClick="javascript: (function(){document.forms[0].submit()})()" value="delete"/>
-						</form>
-					</details>
-					<details>
-						<summary>source</summary>
-						<pre>
-{{ .Src }}
-						</pre>
-					</details>
 				</div>
-				<div class="col-6 text-center">
-					<h2>Notes</h2>
-					<form method="POST" enctype="application/x-www-form-urlencoded" action="/details?pID={{ .PID }}" style="height: 75%">
-					<textarea name="details" style="width: 100%; height: 100%; box-sizing:border-box" onkeydown="if(event.keyCode===9){var v=this.value,s=this.selectionStart,e=this.selectionEnd;this.value=v.substring(0, s)+'\t'+v.substring(e);this.selectionStart=this.selectionEnd=s+1;return false;}">{{ .Details }}</textarea>
-					<input type="submit" value="save"/>
-					</form>
-				</div>
-			</div>
-			<div class="row">
-				<div class="col-12">
-					<svg style="width: 100%; overflow: auto;">
-						<div style="display: flex; justify-content: center; align-items: center;">
-						{{ .Output }}
-						</div>
-					</svg>
-				</div>
-				<div class="col-12 text-center">
-					<a href="/projects?pID={{ .PID }}&download{{ if .Vertical }}&vertical{{end}}" class="btn btn-secondary col-1">download</a>
-					<a href="javascript: copyImageToClipboard()" class="btn btn-secondary col-1">copy</a>
-					{{ if .Vertical }}
-					<a href="/projects?pID={{ .PID }}" class="btn btn-secondary col-1">horizontal</a>
-					{{ else }}
-					<a href="/projects?pID={{ .PID }}&vertical" class="btn btn-secondary col-1">vertical</a>
-					{{ end }}
-				</div>
+				<div class="col-3"></div>
 			</div>
 		</div>
 <script>
