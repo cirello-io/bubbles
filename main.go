@@ -32,6 +32,7 @@ type graph struct {
 	Src             string
 	Details         string
 	AllKnownBubbles []string
+	Vertical        bool
 }
 
 type route struct {
@@ -129,7 +130,11 @@ func main() {
 			http.Error(w, http.StatusText(http.StatusInternalServerError)+":"+err.Error(), http.StatusInternalServerError)
 			return
 		}
-		http.Redirect(w, r, fmt.Sprintf("/projects?pID=%v", pID), http.StatusSeeOther)
+		seeOtherURL := fmt.Sprintf("/projects?pID=%v", pID)
+		if r.URL.Query().Has("vertical") {
+			seeOtherURL += "&vertical"
+		}
+		http.Redirect(w, r, seeOtherURL, http.StatusSeeOther)
 	})
 
 	http.HandleFunc("/rename", func(w http.ResponseWriter, r *http.Request) {
@@ -158,7 +163,11 @@ func main() {
 			http.Error(w, http.StatusText(http.StatusInternalServerError)+":"+err.Error(), http.StatusInternalServerError)
 			return
 		}
-		http.Redirect(w, r, fmt.Sprintf("/projects?pID=%v", pID), http.StatusSeeOther)
+		seeOtherURL := fmt.Sprintf("/projects?pID=%v", pID)
+		if r.URL.Query().Has("vertical") {
+			seeOtherURL += "&vertical"
+		}
+		http.Redirect(w, r, seeOtherURL, http.StatusSeeOther)
 	})
 
 	http.HandleFunc("/delete", func(w http.ResponseWriter, r *http.Request) {
@@ -179,7 +188,11 @@ func main() {
 			http.Error(w, http.StatusText(http.StatusInternalServerError)+":"+err.Error(), http.StatusInternalServerError)
 			return
 		}
-		http.Redirect(w, r, fmt.Sprintf("/projects?pID=%v", pID), http.StatusSeeOther)
+		seeOtherURL := fmt.Sprintf("/projects?pID=%v", pID)
+		if r.URL.Query().Has("vertical") {
+			seeOtherURL += "&vertical"
+		}
+		http.Redirect(w, r, seeOtherURL, http.StatusSeeOther)
 	})
 
 	http.HandleFunc("/store", func(w http.ResponseWriter, r *http.Request) {
@@ -217,7 +230,11 @@ func main() {
 			return
 		}
 
-		http.Redirect(w, r, fmt.Sprintf("/projects?pID=%v", pID), http.StatusSeeOther)
+		seeOtherURL := fmt.Sprintf("/projects?pID=%v", pID)
+		if r.URL.Query().Has("vertical") {
+			seeOtherURL += "&vertical"
+		}
+		http.Redirect(w, r, seeOtherURL, http.StatusSeeOther)
 	})
 
 	http.HandleFunc("/details", func(w http.ResponseWriter, r *http.Request) {
@@ -298,7 +315,9 @@ func main() {
 		knownBubblesIdx := make(map[string]struct{})
 		allKnownBubbles := make(map[string]struct{})
 		fmt.Fprintln(input, "digraph G {")
-		fmt.Fprintln(input, `	rankdir="LR"`)
+		if !r.URL.Query().Has("vertical") {
+			fmt.Fprintln(input, `	rankdir="LR"`)
+		}
 		for rowsPairs.Next() {
 			var dep dep
 			if err := rowsPairs.Scan(&dep.Left, &dep.Right); err != nil {
@@ -396,6 +415,7 @@ func main() {
 			Src:             src,
 			Details:         projectDetails,
 			AllKnownBubbles: allKnownBubblesList,
+			Vertical:        r.URL.Query().Has("vertical"),
 		})
 	})
 
@@ -556,7 +576,7 @@ const projectTpl = `
 
 			<div class="row">
 				<div class="col-6">
-					<form method="POST" enctype="application/x-www-form-urlencoded" action="/store?pID={{ .PID }}">
+					<form method="POST" enctype="application/x-www-form-urlencoded" action="/store?pID={{ .PID }}{{ if .Vertical }}&vertical{{ end }}">
 						<datalist id="knownBubbles">
 						{{ range .AllKnownBubbles }}
 							<option>{{- . -}}</option>
@@ -578,11 +598,12 @@ const projectTpl = `
 									<input type="submit" onClick="javascript: (function(){document.forms[0].submit()})()" value="➕" class="btn"/></th>
 								</thead>
 								<tbody id="pairsTableBody">
+								{{ $vertical := .Vertical }}
 								{{ range .Input }}
 								<tr data-left="{{ .Left }}" data-right="{{ .Right }}">
 									<td class="text-center">{{ .Left }}</td>
 									<td class="text-center">{{ .Right }}</td>
-									<td class="text-center"><a href="/remove?left={{.Left}}&right={{.Right}}" style="text-decoration: none;">🗑️</a></td>
+									<td class="text-center"><a href="/remove?left={{.Left}}&right={{.Right}}{{ if $vertical }}&vertical{{ end }}" style="text-decoration: none;">🗑️</a></td>
 								</tr>
 								{{ end }}
 								</tbody>
@@ -591,7 +612,7 @@ const projectTpl = `
 					</form>
 					<details>
 						<summary>rename</summary>
-						<form method="POST" enctype="application/x-www-form-urlencoded" action="/rename?pID={{ .PID }}">
+						<form method="POST" enctype="application/x-www-form-urlencoded" action="/rename?pID={{ .PID }}{{ if .Vertical }}&vertical{{ end }}">
 							<label>from: <input type="text" list="knownBubbles" name="from"></label>
 							<label>to: <input type="text" name="to"></label>
 							<input type="submit" onClick="javascript: (function(){document.forms[0].submit()})()" value="rename"/>
@@ -599,7 +620,7 @@ const projectTpl = `
 					</details>
 					<details>
 						<summary>delete</summary>
-						<form method="POST" enctype="application/x-www-form-urlencoded" action="/delete?pID={{ .PID }}">
+						<form method="POST" enctype="application/x-www-form-urlencoded" action="/delete?pID={{ .PID }}{{ if .Vertical }}&vertical{{ end }}">
 							<label>activity: <input type="text" list="knownBubbles" name="activity"></label>
 							<input type="submit" onClick="javascript: (function(){document.forms[0].submit()})()" value="delete"/>
 						</form>
@@ -628,8 +649,13 @@ const projectTpl = `
 					</svg>
 				</div>
 				<div class="col-12 text-center">
-					<a href="/projects?pID={{ .PID }}&download" class="btn btn-secondary col-1">download</a>
+					<a href="/projects?pID={{ .PID }}&download{{ if .Vertical }}&vertical{{end}}" class="btn btn-secondary col-1">download</a>
 					<a href="javascript: copyImageToClipboard()" class="btn btn-secondary col-1">copy</a>
+					{{ if .Vertical }}
+					<a href="/projects?pID={{ .PID }}" class="btn btn-secondary col-1">horizontal</a>
+					{{ else }}
+					<a href="/projects?pID={{ .PID }}&vertical" class="btn btn-secondary col-1">vertical</a>
+					{{ end }}
 				</div>
 			</div>
 		</div>
@@ -690,7 +716,7 @@ function filter() {
 }
 async function copyImageToClipboard() {
 	try {
-		const response = await fetch("/projects?pID={{ .PID }}&download");
+		const response = await fetch("/projects?pID={{ .PID }}&download{{ if .Vertical }}&vertical{{end}}");
 		const blob = await response.blob();
 		await navigator.clipboard.write([
 			new ClipboardItem({[blob.type]: blob})
