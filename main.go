@@ -118,17 +118,12 @@ func main() {
 	http.HandleFunc("/remove", func(w http.ResponseWriter, r *http.Request) {
 		dbMu.Lock()
 		defer dbMu.Unlock()
-		row := db.QueryRow("delete from pairs where left = ? and right = ? returning project", r.URL.Query().Get("left"), r.URL.Query().Get("right"))
+		_, err := db.Exec("delete from pairs where left = ? and right = ? and project = ?", r.URL.Query().Get("left"), r.URL.Query().Get("right"), r.URL.Query().Get("pID"))
 		if err != nil {
 			http.Error(w, http.StatusText(http.StatusInternalServerError)+":"+err.Error(), http.StatusInternalServerError)
 			return
 		}
-		var pID uint64
-		if err := row.Scan(&pID); err != nil {
-			http.Error(w, http.StatusText(http.StatusInternalServerError)+":"+err.Error(), http.StatusInternalServerError)
-			return
-		}
-		seeOtherURL := fmt.Sprintf("/projects?pID=%v", pID)
+		seeOtherURL := fmt.Sprintf("/projects?pID=%v", r.URL.Query().Get("pID"))
 		if r.URL.Query().Has("vertical") {
 			seeOtherURL += "&vertical"
 		}
@@ -511,7 +506,7 @@ const indexHTMLTpl = `
 </html>
 `
 
-const projectTpl = `
+const projectTpl = `{{- $pid := .PID -}}
 <!doctype html>
 <html lang="en">
 	<head>
@@ -644,7 +639,7 @@ const projectTpl = `
 								<tr data-left="{{ .Left }}" data-right="{{ .Right }}">
 									<td class="text-center">{{ .Left }}</td>
 									<td class="text-center">{{ .Right }}</td>
-									<td class="text-center"><a href="/remove?left={{.Left}}&right={{.Right}}{{ if $vertical }}&vertical{{ end }}" style="text-decoration: none;">🗑️</a></td>
+									<td class="text-center"><a href="/remove?pID={{ $pid }}&left={{.Left}}&right={{.Right}}{{ if $vertical }}&vertical{{ end }}" style="text-decoration: none;">🗑️</a></td>
 								</tr>
 								{{ end }}
 								</tbody>
