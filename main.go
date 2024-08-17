@@ -627,9 +627,9 @@ const projectTpl = `{{- $pid := .PID -}}
 									<th colspan=2 scope="col" class="text-center">
 
 									<input type="text" list="knownBubbles" id="newLeft" name="newLeft" onKeyUp="javascript: filter()">
-									-&gt;
+									→
 									<input type="text" list="knownBubbles" id="newCenter" name="newCenter" onKeyUp="javascript: filter()">
-									-&gt;
+									→
 									<input type="text" list="knownBubbles" id="newRight" name="newRight" onKeyUp="javascript: filter()">
 									<input type="submit" onClick="javascript: (function(){document.forms[0].submit()})()" value="➕" class="btn"/></th>
 								</thead>
