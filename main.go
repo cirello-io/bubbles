@@ -112,7 +112,7 @@ func main() {
 		if r.URL.Query().Has("vertical") {
 			seeOtherURL += "&vertical"
 		}
-		w.Header().Set("HX-Location", seeOtherURL)
+		http.Redirect(w, r, seeOtherURL, http.StatusSeeOther)
 	})
 
 	http.HandleFunc("DELETE /remove", func(w http.ResponseWriter, r *http.Request) {
