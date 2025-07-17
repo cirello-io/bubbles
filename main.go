@@ -34,11 +34,6 @@ type graph struct {
 	Vertical        bool
 }
 
-type route struct {
-	method string
-	path   string
-}
-
 type bubbleState string
 
 const (
@@ -75,10 +70,14 @@ func main() {
 	log.SetPrefix("bubbleproject: ")
 	log.SetFlags(0)
 
+	baseTpl := template.Must(template.New("base").Parse(baseTemplate))
+
 	var dbMu sync.Mutex
 	db, err := sql.Open("sqlite3", "state.db")
 	check(err)
-	defer db.Close()
+	defer func() {
+		check(db.Close())
+	}()
 
 	sqlStmt := `
 	create table if not exists pairs (project bigint, left text, right text);
@@ -90,10 +89,7 @@ func main() {
 	_, err = db.Exec(sqlStmt)
 	check(err)
 
-	indexHTMLTpl := template.Must(template.New("index.html").Parse(indexHTMLTpl))
-	projectTpl := template.Must(template.New("index.html").Parse(projectTpl))
-
-	http.HandleFunc("/flip", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("GET /flip", func(w http.ResponseWriter, r *http.Request) {
 		dbMu.Lock()
 		defer dbMu.Unlock()
 		pID := r.URL.Query().Get("pID")
@@ -112,29 +108,37 @@ func main() {
 			http.Error(w, http.StatusText(http.StatusInternalServerError)+":"+err.Error(), http.StatusInternalServerError)
 			return
 		}
-		http.Redirect(w, r, fmt.Sprintf("/projects?pID=%v", pID), http.StatusSeeOther)
+		seeOtherURL := fmt.Sprintf("/projects?pID=%v", pID)
+		if r.URL.Query().Has("vertical") {
+			seeOtherURL += "&vertical"
+		}
+		w.Header().Set("HX-Location", seeOtherURL)
 	})
 
-	http.HandleFunc("/remove", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("DELETE /remove", func(w http.ResponseWriter, r *http.Request) {
 		dbMu.Lock()
 		defer dbMu.Unlock()
-		_, err := db.Exec("delete from pairs where left = ? and right = ? and project = ?", r.URL.Query().Get("left"), r.URL.Query().Get("right"), r.URL.Query().Get("pID"))
+		pID := r.URL.Query().Get("pID")
+		_, err := db.Exec("delete from pairs where left = ? and right = ? and project = ?", r.URL.Query().Get("left"), r.URL.Query().Get("right"), pID)
 		if err != nil {
 			http.Error(w, http.StatusText(http.StatusInternalServerError)+":"+err.Error(), http.StatusInternalServerError)
 			return
 		}
-		seeOtherURL := fmt.Sprintf("/projects?pID=%v", r.URL.Query().Get("pID"))
+		seeOtherURL := fmt.Sprintf("/projects?pID=%v", pID)
 		if r.URL.Query().Has("vertical") {
 			seeOtherURL += "&vertical"
 		}
-		http.Redirect(w, r, seeOtherURL, http.StatusSeeOther)
+		w.Header().Set("HX-Location", seeOtherURL)
 	})
 
-	http.HandleFunc("/rename", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("POST /rename", func(w http.ResponseWriter, r *http.Request) {
 		pID := r.URL.Query().Get("pID")
 		dbMu.Lock()
 		defer dbMu.Unlock()
-		r.ParseForm()
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, http.StatusText(http.StatusBadRequest)+":"+err.Error(), http.StatusBadRequest)
+			return
+		}
 		tx, err := db.Begin()
 		if err != nil {
 			http.Error(w, http.StatusText(http.StatusInternalServerError)+":"+err.Error(), http.StatusInternalServerError)
@@ -160,14 +164,17 @@ func main() {
 		if r.URL.Query().Has("vertical") {
 			seeOtherURL += "&vertical"
 		}
-		http.Redirect(w, r, seeOtherURL, http.StatusSeeOther)
+		w.Header().Set("HX-Location", seeOtherURL)
 	})
 
-	http.HandleFunc("/delete", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("POST /delete", func(w http.ResponseWriter, r *http.Request) {
 		pID := r.URL.Query().Get("pID")
 		dbMu.Lock()
 		defer dbMu.Unlock()
-		r.ParseForm()
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, http.StatusText(http.StatusBadRequest)+":"+err.Error(), http.StatusBadRequest)
+			return
+		}
 		tx, err := db.Begin()
 		if err != nil {
 			http.Error(w, http.StatusText(http.StatusInternalServerError)+":"+err.Error(), http.StatusInternalServerError)
@@ -185,13 +192,16 @@ func main() {
 		if r.URL.Query().Has("vertical") {
 			seeOtherURL += "&vertical"
 		}
-		http.Redirect(w, r, seeOtherURL, http.StatusSeeOther)
+		w.Header().Set("HX-Location", seeOtherURL)
 	})
 
-	http.HandleFunc("/store", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("POST /store", func(w http.ResponseWriter, r *http.Request) {
 		dbMu.Lock()
 		defer dbMu.Unlock()
-		r.ParseForm()
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, http.StatusText(http.StatusBadRequest)+":"+err.Error(), http.StatusBadRequest)
+			return
+		}
 		tx, err := db.Begin()
 		if err != nil {
 			http.Error(w, http.StatusText(http.StatusInternalServerError)+":"+err.Error(), http.StatusInternalServerError)
@@ -227,11 +237,14 @@ func main() {
 		if r.URL.Query().Has("vertical") {
 			seeOtherURL += "&vertical"
 		}
-		http.Redirect(w, r, seeOtherURL, http.StatusSeeOther)
+		w.Header().Set("HX-Location", seeOtherURL)
 	})
 
-	http.HandleFunc("/projects/new", func(w http.ResponseWriter, r *http.Request) {
-		r.ParseForm()
+	http.HandleFunc("POST /projects/new", func(w http.ResponseWriter, r *http.Request) {
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, http.StatusText(http.StatusBadRequest)+":"+err.Error(), http.StatusBadRequest)
+			return
+		}
 		name := r.FormValue("name")
 		dbMu.Lock()
 		defer dbMu.Unlock()
@@ -245,47 +258,51 @@ func main() {
 			http.Error(w, http.StatusText(http.StatusInternalServerError)+":"+err.Error(), http.StatusInternalServerError)
 			return
 		}
-
-		http.Redirect(w, r, fmt.Sprintf("/projects?pID=%v", uint64(pID)), http.StatusSeeOther)
+		seeOtherURL := fmt.Sprintf("/projects?pID=%v", pID)
+		w.Header().Set("HX-Location", seeOtherURL)
 	})
 
-	http.HandleFunc("/projects", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("DELETE /projects", func(w http.ResponseWriter, r *http.Request) {
+		dbMu.Lock()
+		defer dbMu.Unlock()
 		pID := r.URL.Query().Get("pID")
-		r.ParseForm()
+		if _, err := db.Exec("DELETE FROM pairs WHERE project = ?", pID); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if _, err := db.Exec("DELETE FROM bubbles WHERE project = ?", pID); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if _, err := db.Exec("DELETE FROM projects WHERE project = ?", pID); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("HX-Refresh", "true")
+		w.WriteHeader(http.StatusOK)
+	})
+
+	renderProjectTpl := template.Must(template.Must(baseTpl.Clone()).New("content").Parse(renderProjectTemplate))
+	http.HandleFunc("GET /projects", func(w http.ResponseWriter, r *http.Request) {
+		pID := r.URL.Query().Get("pID")
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, http.StatusText(http.StatusBadRequest)+":"+err.Error(), http.StatusBadRequest)
+			return
+		}
 		var deps []dep
 		dbMu.Lock()
 		defer dbMu.Unlock()
-		if r.Method == http.MethodPost && r.Form.Has("delete") {
-			pID := r.Form.Get("pID")
-			if _, err := db.Exec("DELETE FROM pairs WHERE project = ?", pID); err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-			if _, err := db.Exec("DELETE FROM bubbles WHERE project = ?", pID); err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-			if _, err := db.Exec("DELETE FROM projects WHERE project = ?", pID); err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-			http.Redirect(w, r, "/", http.StatusSeeOther)
-			return
-		}
-
-		var projectName string
-		rowProject := db.QueryRow("select name from projects where project = ?", pID)
-		if err := rowProject.Scan(&projectName); err != nil {
-			http.Error(w, http.StatusText(http.StatusInternalServerError)+":"+err.Error(), http.StatusInternalServerError)
-			return
-		}
 
 		rowsPairs, err := db.Query("select left, right from pairs where project = ?", pID)
 		if err != nil {
 			http.Error(w, http.StatusText(http.StatusInternalServerError)+":"+err.Error(), http.StatusInternalServerError)
 			return
 		}
-		defer rowsPairs.Close()
+		defer func() {
+			if err := rowsPairs.Close(); err != nil {
+				log.Printf("cannot close rowsPairs: %v", err)
+			}
+		}()
 		input := &bytes.Buffer{}
 		knownBubblesIdx := make(map[string]struct{})
 		allKnownBubbles := make(map[string]struct{})
@@ -324,7 +341,11 @@ func main() {
 			http.Error(w, http.StatusText(http.StatusInternalServerError)+":"+err.Error(), http.StatusInternalServerError)
 			return
 		}
-		defer rowsBubbles.Close()
+		defer func() {
+			if err := rowsBubbles.Close(); err != nil {
+				log.Printf("cannot close rowsBubbles: %v", err)
+			}
+		}()
 		for rowsBubbles.Next() {
 			var bubble bubble
 			if err := rowsBubbles.Scan(&bubble.Bubble, &bubble.State); err != nil {
@@ -365,7 +386,9 @@ func main() {
 			}
 			w.Header().Set("Content-Type", "image/png")
 			w.Header().Set("Content-Disposition", `attachment; filename="graph.png"`)
-			io.Copy(w, &outBuf)
+			if _, err := io.Copy(w, &outBuf); err != nil {
+				log.Println(err)
+			}
 			return
 		}
 
@@ -381,7 +404,13 @@ func main() {
 		}
 		allKnownBubblesList := maps.Keys(allKnownBubbles)
 		slices.Sort(allKnownBubblesList)
-		projectTpl.Execute(w, graph{
+		var projectName string
+		rowProject := db.QueryRow("select name from projects where project = ?", pID)
+		if err := rowProject.Scan(&projectName); err != nil {
+			http.Error(w, http.StatusText(http.StatusInternalServerError)+":"+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		err = renderProjectTpl.ExecuteTemplate(w, "base", graph{
 			PID:             pID,
 			Name:            projectName,
 			Input:           deps,
@@ -391,43 +420,48 @@ func main() {
 			AllKnownBubbles: allKnownBubblesList,
 			Vertical:        r.URL.Query().Has("vertical"),
 		})
-	})
-
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		rt := route{r.Method, r.URL.Path}
-		switch rt {
-		case route{http.MethodGet, "/"}:
-
-			dbMu.Lock()
-			defer dbMu.Unlock()
-			rows, err := db.Query("select project, name from projects", r.URL.Query().Get("left"), r.URL.Query().Get("right"))
-			if err != nil {
-				http.Error(w, http.StatusText(http.StatusInternalServerError)+":"+err.Error(), http.StatusInternalServerError)
-				return
-			}
-			defer rows.Close()
-			var projects []project
-			for rows.Next() {
-				var project project
-				if err := rows.Scan(&project.ID, &project.Name); err != nil {
-					http.Error(w, http.StatusText(http.StatusInternalServerError)+":"+err.Error(), http.StatusInternalServerError)
-					return
-				}
-				projects = append(projects, project)
-			}
-			if err := rows.Err(); err != nil {
-				http.Error(w, http.StatusText(http.StatusInternalServerError)+":"+err.Error(), http.StatusInternalServerError)
-				return
-			}
-			indexHTMLTpl.Execute(w, struct {
-				Project []project
-			}{projects})
-		default:
-			http.NotFound(w, r)
-			return
+		if err != nil {
+			log.Printf("cannot execute template: %v", err)
 		}
 	})
-	check(http.ListenAndServe(":5466", nil))
+
+	listProjectsTpl := template.Must(template.Must(baseTpl.Clone()).New("content").Parse(listProjectsTemplate))
+	http.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
+		dbMu.Lock()
+		defer dbMu.Unlock()
+		rows, err := db.Query("select project, name from projects", r.URL.Query().Get("left"), r.URL.Query().Get("right"))
+		if err != nil {
+			http.Error(w, http.StatusText(http.StatusInternalServerError)+":"+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		defer func() {
+			if err := rows.Close(); err != nil {
+				log.Printf("cannot close rows: %v", err)
+			}
+		}()
+		var projects []project
+		for rows.Next() {
+			var project project
+			if err := rows.Scan(&project.ID, &project.Name); err != nil {
+				http.Error(w, http.StatusText(http.StatusInternalServerError)+":"+err.Error(), http.StatusInternalServerError)
+				return
+			}
+			projects = append(projects, project)
+		}
+		if err := rows.Err(); err != nil {
+			http.Error(w, http.StatusText(http.StatusInternalServerError)+":"+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		err = listProjectsTpl.ExecuteTemplate(w, "base", struct {
+			Project []project
+		}{projects})
+		if err != nil {
+			log.Printf("cannot execute template: %v", err)
+		}
+	})
+	const bindAddr = "0.0.0.0:5466"
+	log.Println("Starting server on http://" + bindAddr)
+	check(http.ListenAndServe(bindAddr, nil))
 }
 
 func check(err error) {
@@ -437,219 +471,176 @@ func check(err error) {
 	}
 }
 
-const indexHTMLTpl = `
+const baseTemplate = `
+{{ define "base" }}
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="light">
 	<head>
 		<meta charset="utf-8">
 		<meta name="viewport" content="width=device-width, initial-scale=1">
-		<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.1/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-+0n0xVW2eSR5OomGNYDnhzAbDsOXxcvSN1TPprVMTNDbiYZCxYbOOl7+AMvyTG2x" crossorigin="anonymous">
-		<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.1/dist/js/bootstrap.bundle.min.js" integrity="sha384-gtEjrD/SeCtmISkJkNUaaKMoLD0//ElJ19smozuHV6z3Iehds+3Ulb9Bn9Plx0x4" crossorigin="anonymous"></script>
+		<script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.6/dist/htmx.min.js"></script>
+		<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+		<style>
+			svg a { text-decoration: none; color: black; }
+		</style>
 	</head>
-	<body>
-		<nav class="navbar navbar-expand-lg navbar-light bg-light">
-			<div class="container-fluid">
-				<a class="navbar-brand" href="/">Bubbles</a>
-				<button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
-					<span class="navbar-toggler-icon"></span>
-				</button>
-
-				<div class="collapse navbar-collapse" id="navbarSupportedContent">
-					<ul class="navbar-nav me-auto mb-2 mb-lg-0">
-						<li class="nav-item dropdown">
-							<a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-								New Project
-							</a>
-							<ul class="dropdown-menu" aria-labelledby="navbarDropdown">
-							<li>
-								<div class="dropdown-item">
+	<body hx-boost="true">
+		<header class="container">
+			<nav>
+				<ul>
+					<li>
+						<a href="/" class="secondary">
+							<strong>Bubbles</strong>
+						</a>
+					</li>
+				</ul>
+				<ul>
+					<li>
+						<details class="dropdown">
+							<summary>new project</summary>
+							<ul>
+								<li>
 									<form method="POST" enctype="application/x-www-form-urlencoded" action="/projects/new">
-										<div class="mb-3">
-											<label class="form-label" for="name">project name:</label>
-											<input type="text" name="name" id="name" class="form-control"/>
+										<div>
+											<label for="name">project name</label>
+											<input type="text" name="name" id="name"/>
 										</div>
-										<input type="submit" class="btn btn-primary"/>
+										<input type="submit"/>
 									</form>
-								</div>
-							</li>
+								</li>
 							</ul>
-						</li>
-					</ul>
-				</div>
-			</div>
-		</nav>
-		<div class="container-fluid">
-			<div class="row">
-				<div class="col">
-					<h1>Projects</h1>
-				</div>
-			</div>
-			<div class="row">
-				<div class="col">
-					<ul class="list-group">
-					{{ range .Project }}
-						<il class="list-group-item">
-							<a href="/projects?pID={{.ID}}">{{.Name}}</a>
-							<form method="POST" action="/projects" class="d-inline" onsubmit="return confirm('confirm deletion?')">
-								<input type="hidden" name="delete" value="true">
-								<input type="hidden" name="pID" value="{{.ID}}">
-								<input type=submit value="🗑️"/>
-							</form>
-						</il>
-					{{ end }}
-					</ul>
-				</div>
-			</div>
-
-		</div>
+						</details>
+					</li>
+				</ul>
+			</nav>
+		</header>
+		<main class="container">
+		{{ template "content" . }}
+		</main>
 	</body>
 </html>
+{{ end }}
 `
 
-const projectTpl = `{{- $pid := .PID -}}
-<!doctype html>
-<html lang="en">
-	<head>
-		<meta charset="utf-8">
-		<meta name="viewport" content="width=device-width, initial-scale=1">
-		<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.1/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-+0n0xVW2eSR5OomGNYDnhzAbDsOXxcvSN1TPprVMTNDbiYZCxYbOOl7+AMvyTG2x" crossorigin="anonymous">
-		<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.1/dist/js/bootstrap.bundle.min.js" integrity="sha384-gtEjrD/SeCtmISkJkNUaaKMoLD0//ElJ19smozuHV6z3Iehds+3Ulb9Bn9Plx0x4" crossorigin="anonymous"></script>
-	</head>
-	<body>
-		<nav class="navbar navbar-expand-lg navbar-light bg-light">
-			<div class="container-fluid">
-				<a class="navbar-brand" href="/">Bubbles</a>
-				<button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
-					<span class="navbar-toggler-icon"></span>
-				</button>
+const listProjectsTemplate = `
+<strong>Projects</strong>
+{{ with .Project }}
+{{ range . }}
+<ul>
+	<li>
+		<a href="/projects?pID={{.ID}}">{{.Name}}</a>
+		<a hx-delete="/projects?pID={{.ID}}" style="text-decoration: none;" hx-confirm="Are you sure you want to delete this project?">🗑️</a>
+	</li>
+</ul>
+{{ end }}
+{{ else }}
+<p>no projects yet</p>
+{{ end }}
+`
 
-				<div class="collapse navbar-collapse" id="navbarSupportedContent">
-					<ul class="navbar-nav me-auto mb-2 mb-lg-0">
-						<li class="nav-item dropdown">
-							<a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-								New Project
-							</a>
-							<ul class="dropdown-menu" aria-labelledby="navbarDropdown">
-							<li>
-								<div class="dropdown-item">
-									<form method="POST" enctype="application/x-www-form-urlencoded" action="/projects/new">
-										<div class="mb-3">
-											<label class="form-label" for="name">project name:</label>
-											<input type="text" name="name" id="name" class="form-control"/>
-										</div>
-										<input type="submit" class="btn btn-primary"/>
-									</form>
-								</div>
-							</li>
-							</ul>
-						</li>
-					</ul>
-				</div>
-			</div>
-		</nav>
-
-		<div class="container-fluid">
-			<div class="row">
-				<div class="col">
-					<h1>Project: {{ .Name }}</h1>
-				</div>
-			</div>
-
-			<div class="row">
-				<div class="col-12 text-center">
-					<a href="/projects?pID={{ .PID }}&download{{ if .Vertical }}&vertical{{end}}" class="btn btn-secondary col-1">download</a>
-					<a href="javascript: copyImageToClipboard()" class="btn btn-secondary col-1">copy</a>
-					{{ if .Vertical }}
-					<a href="/projects?pID={{ .PID }}" class="btn btn-secondary col-1">horizontal</a>
-					{{ else }}
-					<a href="/projects?pID={{ .PID }}&vertical" class="btn btn-secondary col-1">vertical</a>
-					{{ end }}
-				</div>
-				<div class="col-12">
-					<svg style="width: 100%; overflow: auto;">
-						<div style="display: flex; justify-content: center; align-items: center;">
-						{{ .Output }}
-						</div>
-					</svg>
-				</div>
-
-			</div>
-
-			<div class="row">
-				<div class="col-4">
-					<details>
-						<summary>rename</summary>
-						<form method="POST" enctype="application/x-www-form-urlencoded" action="/rename?pID={{ .PID }}{{ if .Vertical }}&vertical{{ end }}">
-							<label>from: <input type="text" list="knownBubbles" name="from"></label>
-							<label>to: <input type="text" name="to"></label>
-							<input type="submit" onClick="javascript: (function(){document.forms[0].submit()})()" value="rename"/>
-						</form>
-					</details>
-				</div>
-				<div class="col-4">
-					<details>
-						<summary>delete</summary>
-						<form method="POST" enctype="application/x-www-form-urlencoded" action="/delete?pID={{ .PID }}{{ if .Vertical }}&vertical{{ end }}">
-							<label>activity: <input type="text" list="knownBubbles" name="activity"></label>
-							<input type="submit" onClick="javascript: (function(){document.forms[0].submit()})()" value="delete"/>
-						</form>
-					</details>
-				</div>
-				<div class="col-4">
-				<details>
-					<summary>source</summary>
-					<pre>
-{{ .Src }}
-					</pre>
-				</details>
-				</div>
-			</div>
-			<div class="row">
-				<div class="col-12">
-					<hr/>
-				</div>
-			</div>
-			<div class="row">
-				<div class="col-3"></div>
-				<div class="col-6">
-					<form method="POST" enctype="application/x-www-form-urlencoded" action="/store?pID={{ .PID }}{{ if .Vertical }}&vertical{{ end }}">
-						<datalist id="knownBubbles">
-						{{ range .AllKnownBubbles }}
-							<option>{{- . -}}</option>
-						{{ end }}
-						</datalist>
-						{{ if .Err }}
-						<div>{{ .Err }}</div>
-						{{ end }}
-						<div>
-							<table class="table table-striped table-hover">
-								<thead>
-									<th colspan=2 scope="col" class="text-center">
-
-									<input type="text" list="knownBubbles" id="newLeft" name="newLeft" onKeyUp="javascript: filter()">
-									→
-									<input type="text" list="knownBubbles" id="newCenter" name="newCenter" onKeyUp="javascript: filter()">
-									→
-									<input type="text" list="knownBubbles" id="newRight" name="newRight" onKeyUp="javascript: filter()">
-									<input type="submit" onClick="javascript: (function(){document.forms[0].submit()})()" value="➕" class="btn"/></th>
-								</thead>
-								<tbody id="pairsTableBody">
-								{{ $vertical := .Vertical }}
-								{{ range .Input }}
-								<tr data-left="{{ .Left }}" data-right="{{ .Right }}">
-									<td class="text-center">{{ .Left }}</td>
-									<td class="text-center">{{ .Right }}</td>
-									<td class="text-center"><a href="/remove?pID={{ $pid }}&left={{.Left}}&right={{.Right}}{{ if $vertical }}&vertical{{ end }}" style="text-decoration: none;">🗑️</a></td>
-								</tr>
-								{{ end }}
-								</tbody>
-							</table>
-						</div>
-					</form>
-				</div>
-				<div class="col-3"></div>
-			</div>
+const renderProjectTemplate = `
+{{- $pid := .PID -}}
+<strong>Project: {{ .Name }}</strong>
+<section>
+<div class="grid">
+	<div>
+		<a href="/projects?pID={{ .PID }}&download{{ if .Vertical }}&vertical{{end}}" class="secondary">download</a>
+		<a href="javascript: copyImageToClipboard()" class="secondary">copy</a>
+		{{ if .Vertical }}
+		<a href="/projects?pID={{ .PID }}" class="secondary">horizontal</a>
+		{{ else }}
+		<a href="/projects?pID={{ .PID }}&vertical" class="secondary">vertical</a>
+		{{ end }}
+	</div>
+</div>
+</section>
+<section>
+	<div class="grid">
+		<div style="text-align: center;">
+			{{ .Output }}
 		</div>
+	</div>
+</section>
+<section>
+<div class="grid">
+	<div>
+		<article>
+			<details>
+				<summary>rename</summary>
+				<form method="POST" enctype="application/x-www-form-urlencoded" action="/rename?pID={{ .PID }}{{ if .Vertical }}&vertical{{ end }}">
+					<label>from: <input type="text" list="knownBubbles" name="from"></label>
+					<label>to: <input type="text" name="to"></label>
+					<input type="submit" value="rename"/>
+				</form>
+			</details>
+		</article>
+	</div>
+	<div>
+		<article>
+			<details>
+				<summary>delete</summary>
+				<form method="POST" enctype="application/x-www-form-urlencoded" action="/delete?pID={{ .PID }}{{ if .Vertical }}&vertical{{ end }}">
+					<label>activity: <input type="text" list="knownBubbles" name="activity"></label>
+					<input type="submit" value="delete"/>
+				</form>
+			</details>
+		</article>
+	</div>
+	<div>
+		<article>
+			<details>
+				<summary>source</summary>
+				<pre>
+{{ .Src }}
+				</pre>
+			</details>
+		</article>
+	</div>
+</div>
+<div class="grid">
+	<div>
+		<hr/>
+	</div>
+</div>
+<div class="grid">
+	<div>
+		<datalist id="knownBubbles">
+		{{ range .AllKnownBubbles }}
+			<option>{{- . -}}</option>
+		{{ end }}
+		</datalist>
+		{{ if .Err }}
+			<div>{{ .Err }}</div>
+		{{ end }}
+		<form method="POST" enctype="application/x-www-form-urlencoded" action="/store?pID={{ .PID }}{{ if .Vertical }}&vertical{{ end }}">
+			<fieldset class="grid">
+				<input type="text" list="knownBubbles" id="newLeft" name="newLeft" onKeyUp="javascript: filter()">
+				<input type="text" list="knownBubbles" id="newCenter" name="newCenter" onKeyUp="javascript: filter()">
+				<input type="text" list="knownBubbles" id="newRight" name="newRight" onKeyUp="javascript: filter()">
+				<input type="submit" value="+"/>
+			</fieldset>
+		</form>
+	</div>
+</div>
+<div class="grid">
+	<div></div>
+	<div>
+		<table>
+			<tbody id="pairsTableBody" class="striped">
+			{{ $vertical := .Vertical }}
+			{{ range .Input }}
+			<tr id="pair-{{ .Left }}-{{ .Right }}-{{ $pid }}" data-left="{{ .Left }}" data-right="{{ .Right }}">
+				<td>{{ .Left }}</td>
+				<td>{{ .Right }}</td>
+				<td><button hx-delete="/remove?pID={{ $pid }}&left={{.Left}}&right={{.Right}}{{ if $vertical }}&vertical{{ end }}" style="text-decoration: none;">🗑️</button></td>
+			</tr>
+			{{ end }}
+			</tbody>
+		</table>
+	</div>
+	<div></div>
+</div>
+</section>
 <script>
 function setCookie(value) {
 	document.cookie = "bubbles=" + encodeURIComponent(JSON.stringify(value));
@@ -717,6 +708,4 @@ async function copyImageToClipboard() {
 	}
 }
 </script>
-	</body>
-</html>
 `
