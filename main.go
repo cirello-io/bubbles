@@ -481,7 +481,9 @@ const baseTemplate = `
 		<script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.6/dist/htmx.min.js"></script>
 		<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
 		<style>
-			svg a { text-decoration: none; color: black; }
+			#svg-container { text-align: center; }
+			#svg-container svg { max-width: 100%; height: auto; }
+			#svg-container svg a { text-decoration: none; color: black; width: 100%;  }
 		</style>
 	</head>
 	<body hx-boost="true">
@@ -556,7 +558,7 @@ const renderProjectTemplate = `
 </section>
 <section>
 	<div class="grid">
-		<div style="text-align: center;">
+		<div id="svg-container">
 			{{ .Output }}
 		</div>
 	</div>
