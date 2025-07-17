@@ -507,7 +507,7 @@ const baseTemplate = `
 											<label for="name">project name</label>
 											<input type="text" name="name" id="name"/>
 										</div>
-										<input type="submit"/>
+										<input type="submit" value="create"/>
 									</form>
 								</li>
 							</ul>
@@ -619,7 +619,7 @@ const renderProjectTemplate = `
 				<input type="text" list="knownBubbles" id="newLeft" name="newLeft" onKeyUp="javascript: filter()">
 				<input type="text" list="knownBubbles" id="newCenter" name="newCenter" onKeyUp="javascript: filter()">
 				<input type="text" list="knownBubbles" id="newRight" name="newRight" onKeyUp="javascript: filter()">
-				<input type="submit" value="+"/>
+				<input type="submit" value="➕" class="outline contrast"/>
 			</fieldset>
 		</form>
 	</div>
@@ -634,7 +634,7 @@ const renderProjectTemplate = `
 			<tr id="pair-{{ .Left }}-{{ .Right }}-{{ $pid }}" data-left="{{ .Left }}" data-right="{{ .Right }}">
 				<td>{{ .Left }}</td>
 				<td>{{ .Right }}</td>
-				<td><button hx-delete="/remove?pID={{ $pid }}&left={{.Left}}&right={{.Right}}{{ if $vertical }}&vertical{{ end }}" style="text-decoration: none;">🗑️</button></td>
+				<td><button hx-delete="/remove?pID={{ $pid }}&left={{.Left}}&right={{.Right}}{{ if $vertical }}&vertical{{ end }}" class="outline contrast">🗑️</button></td>
 			</tr>
 			{{ end }}
 			</tbody>
