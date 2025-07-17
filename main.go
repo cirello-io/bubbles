@@ -625,7 +625,6 @@ const renderProjectTemplate = `
 	</div>
 </div>
 <div class="grid">
-	<div></div>
 	<div>
 		<table>
 			<tbody id="pairsTableBody" class="striped">
@@ -640,7 +639,6 @@ const renderProjectTemplate = `
 			</tbody>
 		</table>
 	</div>
-	<div></div>
 </div>
 </section>
 <script>
