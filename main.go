@@ -356,7 +356,11 @@ func main() {
 				continue
 			}
 			delete(knownBubblesIdx, bubble.Bubble)
-			fmt.Fprintf(input, `	%q [href="/flip?pID=%v&bubble=%v",%v]`, bubble.Bubble, pID, template.URLQueryEscaper(bubble.Bubble), bubble.State.color())
+			vertical := ""
+			if r.URL.Query().Has("vertical") {
+				vertical = "&vertical"
+			}
+			fmt.Fprintf(input, `	%q [href="/flip?pID=%v&bubble=%v%s",%v]`, bubble.Bubble, pID, template.URLQueryEscaper(bubble.Bubble), vertical, bubble.State.color())
 			fmt.Fprintln(input)
 		}
 		if err := rowsBubbles.Err(); err != nil {
@@ -369,7 +373,11 @@ func main() {
 		}
 		sort.Strings(knownBubbles)
 		for _, bubble := range knownBubbles {
-			fmt.Fprintf(input, `	%q [href="/flip?pID=%v&bubble=%v"]`, bubble, pID, template.URLQueryEscaper(bubble))
+			vertical := ""
+			if r.URL.Query().Has("vertical") {
+				vertical = "&vertical"
+			}
+			fmt.Fprintf(input, `	%q [href="/flip?pID=%v&bubble=%v%s"]`, bubble, pID, template.URLQueryEscaper(bubble), vertical)
 			fmt.Fprintln(input)
 		}
 		fmt.Fprintln(input, "}")
