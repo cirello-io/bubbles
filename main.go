@@ -554,7 +554,7 @@ const renderProjectTemplate = `
 <section>
 <div class="grid">
 	<div>
-		<a href="/projects?pID={{ .PID }}&download{{ if .Vertical }}&vertical{{end}}" class="secondary">download</a>
+		<a href="/projects?pID={{ .PID }}&download{{ if .Vertical }}&vertical{{end}}" hx-boost="false" download="graph.png" class="secondary">download</a>
 		<a href="javascript: copyImageToClipboard()" class="secondary">copy</a>
 		{{ if .Vertical }}
 		<a href="/projects?pID={{ .PID }}" class="secondary">horizontal</a>
