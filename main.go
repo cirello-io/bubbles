@@ -384,7 +384,8 @@ func main() {
 		src := input.String()
 
 		download := r.URL.Query().Has("download")
-		if download {
+		view := r.URL.Query().Has("view")
+		if download || view {
 			cmd := exec.CommandContext(r.Context(), "dot", "-Tpng")
 			cmd.Stdin = input
 			var outBuf bytes.Buffer
@@ -393,7 +394,11 @@ func main() {
 				log.Println(err)
 			}
 			w.Header().Set("Content-Type", "image/png")
-			w.Header().Set("Content-Disposition", `attachment; filename="graph.png"`)
+			disposition := `inline; filename="graph.png"`
+			if download {
+				disposition = `attachment; filename="graph.png"`
+			}
+			w.Header().Set("Content-Disposition", disposition)
 			if _, err := io.Copy(w, &outBuf); err != nil {
 				log.Println(err)
 			}
@@ -555,6 +560,7 @@ const renderProjectTemplate = `
 <div class="grid">
 	<div>
 		<a href="/projects?pID={{ .PID }}&download{{ if .Vertical }}&vertical{{end}}" hx-boost="false" download="graph.png" class="secondary">download</a>
+		<a href="/projects?pID={{ .PID }}&view{{ if .Vertical }}&vertical{{end}}" hx-boost="false" target="_blank" rel="noopener noreferrer" class="secondary">view full image</a>
 		<a href="javascript: copyImageToClipboard()" class="secondary">copy</a>
 		{{ if .Vertical }}
 		<a href="/projects?pID={{ .PID }}" class="secondary">horizontal</a>
