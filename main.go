@@ -50,7 +50,7 @@ func (b bubbleState) color() string {
 	case done:
 		return "style=filled,fillcolor=lightgreen"
 	case aborted:
-		return "style=filled,fillcolor=red,color=white"
+		return "style=filled,fillcolor=red,fontcolor=white"
 	default:
 		return ""
 	}
